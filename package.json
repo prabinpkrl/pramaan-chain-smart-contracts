@@ -8,6 +8,9 @@
     "compile": "hardhat compile",
     "test": "hardhat test",
     "coverage": "hardhat test --coverage",
+    "local:node": "hardhat node",
+    "local:deploy": "hardhat run scripts/deploy.js --network localhost",
+    "local:demo": "hardhat run scripts/demo.js --network localhost",
     "clean": "hardhat clean"
   },
   "engines": {

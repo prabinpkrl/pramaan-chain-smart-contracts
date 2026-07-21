@@ -8,7 +8,10 @@ Stages 3 through 6 and fully tested in Stage 7.
 
 Stage 2 did not implement this behavior. Stages 3 through 7 now implement role
 management, issuer management, certificate issuance, lookup, verification,
-permanent revocation, and systematic contract test coverage.
+permanent revocation, and systematic contract test coverage. Stage 8 adds a
+repeatable deployment and full-flow demonstration on a local Hardhat node.
+Stage 9 adds the clean-install guide and backend handoff documentation without
+changing the approved contract behavior.
 
 The contract stores certificate proof and blockchain metadata only. Document
 contents, citizen information, detailed revocation reasons, and other personal
