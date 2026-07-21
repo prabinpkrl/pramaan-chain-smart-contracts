@@ -3,9 +3,9 @@
 ## 1. Scope
 
 This document describes the interface that a later backend service will use.
-It does not implement that backend. Sepolia is selected for future staging and
-configured in Stage 10, but no public contract address exists yet and no
-production network is defined.
+It does not implement that backend. The contract is deployed and verified on
+Sepolia for public staging. No production network or production deployment is
+defined.
 
 The contract accepts only SHA-256 document hashes and stores non-sensitive
 blockchain metadata. Original documents and all personal information remain
@@ -23,26 +23,49 @@ off-chain.
 | Full artifact | `artifacts/contracts/PramaanChain.sol/PramaanChain.json` |
 | ABI | The artifact's `abi` property |
 
-Prepared Sepolia connection metadata:
+Deployed Sepolia connection metadata:
 
-| Item | Stage 10 value |
+| Item | Public Sepolia testnet value |
 | --- | --- |
 | Network | `sepolia` |
 | Chain ID | `11155111` |
 | RPC configuration | `SEPOLIA_RPC_URL` secret; no credentialed URL is committed |
-| Signer 0 | Dedicated test-only administrator/deployer |
-| Signer 1 | Separate dedicated test-only issuer |
-| Contract address | Not available until the separately approved Stage 11 deployment |
-| Source verification | Etherscan, required after Stage 11 deployment |
+| Contract address | `0x0bb21729BBDaBe54A289A1e924941F8F635Cab84` |
+| Deployment commit | `73a711d0694197e70e2c262fffd587183c7414fa` |
+| Administrator/deployer | `0x3537d004295AF62098e63DCF6bB8A7c6dAaCB447` |
+| Authorized issuer | `0x4e02876F9bfd58f9D2D542F9520055BeD3addd28` |
+| Source verification | [Verified contract on Etherscan](https://sepolia.etherscan.io/address/0x0bb21729BBDaBe54A289A1e924941F8F635Cab84#code) |
 
-There is no permanent contract address yet. The address in the Stage 8 evidence
-belongs to a temporary local chain and is not integration configuration for a
-new node session. A later public deployment must supply its own reviewed RPC
-URL, chain ID, address, confirmations policy, and signer configuration.
+Transaction hashes, block numbers, lifecycle results, gas use, and bytecode
+comparison evidence are recorded in
+[`SEPOLIA_DEPLOYMENT.md`](SEPOLIA_DEPLOYMENT.md).
+
+The Sepolia address is persistent public testnet integration configuration.
+The address in the Stage 8 evidence belongs to a temporary local chain and is
+not integration configuration for a new node session. A future production
+deployment must supply its own reviewed RPC URL, chain ID, address,
+confirmation policy, and signer configuration.
 
 For local integration, start the node, deploy the contract, retain the printed
 address for that running node, and initialize the client with the generated
 ABI. Recompiling regenerates the ignored `artifacts/` directory.
+
+Generate the ABI from the reviewed production build with:
+
+```bash
+npx hardhat compile --build-profile production
+```
+
+The generated artifact is located at:
+
+```text
+artifacts/contracts/PramaanChain.sol/PramaanChain.json
+```
+
+Use the artifact's `abi` property. The `artifacts/` directory is generated and
+ignored by Git, so the backend build or release process must compile the
+reviewed commit or securely package that ABI rather than expecting it in the
+repository.
 
 ## 3. Roles and callers
 
@@ -226,11 +249,13 @@ was returned.
 
 ## 10. Required backend configuration
 
-A later deployment must supply and validate:
+For Sepolia staging, the backend must use and validate:
 
-- RPC URL and expected chain ID;
-- deployed `PramaanChain` address for that chain;
-- ABI generated from the same reviewed contract build;
+- an approved Sepolia RPC URL and expected chain ID `11155111`;
+- deployed `PramaanChain` address
+  `0x0bb21729BBDaBe54A289A1e924941F8F635Cab84`;
+- ABI generated from deployment commit
+  `73a711d0694197e70e2c262fffd587183c7414fa`;
 - administrator signer for issuer management and emergency revocation;
 - issuer signer mapping for certificate issuance;
 - SHA-256 byte-canonicalization rules;
@@ -261,10 +286,9 @@ Vault, or equivalent design.
 
 ## 12. Known limitations and deferred work
 
-The completed component is a local, non-upgradeable proof registry with
-prepared Sepolia configuration. It does not yet include:
+The completed component is a local and Sepolia-deployed, non-upgradeable proof
+registry. It does not yet include:
 
-- an executed Sepolia deployment or Etherscan-verified public address;
 - Ethereum mainnet or production deployment;
 - backend implementation, REST APIs, databases, or transaction queues;
 - frontend applications or QR-code generation and scanning;

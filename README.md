@@ -5,9 +5,9 @@ anchor SHA-256 document hashes, and anyone can read whether a hash is unknown,
 active, or permanently revoked. The contract never receives or stores the
 certificate file or citizen information.
 
-The local implementation and demonstration are complete. Sepolia configuration
-is prepared for an independently reviewed future deployment, but no public
-testnet or production deployment has occurred.
+The local implementation and demonstration are complete. The independently
+reviewed contract is also deployed and source-verified on Sepolia. No
+production deployment has occurred.
 
 ## Requirements
 
@@ -49,8 +49,8 @@ ignored by Git, so compile before attempting to load it.
 | `npm run local:node` | Start a persistent local Hardhat JSON-RPC node |
 | `npm run local:deploy` | Deploy a fresh contract to the running local node |
 | `npm run local:demo` | Run the full checked local certificate lifecycle |
-| `npm run sepolia:deploy-demo` | Stage 11 only: deploy and run the synthetic lifecycle on Sepolia |
-| `npm run sepolia:verify -- <address>` | Stage 11 only: verify the deployed address on Etherscan |
+| `npm run sepolia:deploy-demo` | Run the guarded synthetic lifecycle on Sepolia; requires explicit deployment approval |
+| `npm run sepolia:verify -- <address>` | Verify a deployed Sepolia address on Etherscan |
 
 ## Local deployment
 
@@ -91,11 +91,24 @@ temporary. Stopping and restarting the local node resets the chain. Never use
 the printed development private keys on a public network or fund those
 addresses with real assets.
 
-## Sepolia preparation
+## Sepolia deployment
 
 Sepolia is configured as an HTTP layer-1 network with chain ID `11155111`.
 Configuration values are lazy, so local compilation, tests, and demonstrations
 do not require Sepolia secrets.
+
+| Item | Public Sepolia testnet value |
+| --- | --- |
+| Contract address | [`0x0bb21729BBDaBe54A289A1e924941F8F635Cab84`](https://sepolia.etherscan.io/address/0x0bb21729BBDaBe54A289A1e924941F8F635Cab84) |
+| Chain ID | `11155111` |
+| Deployment commit | `73a711d0694197e70e2c262fffd587183c7414fa` |
+| Administrator | `0x3537d004295AF62098e63DCF6bB8A7c6dAaCB447` |
+| Authorized issuer | `0x4e02876F9bfd58f9D2D542F9520055BeD3addd28` |
+| Source verification | [Verified contract on Etherscan](https://sepolia.etherscan.io/address/0x0bb21729BBDaBe54A289A1e924941F8F635Cab84#code) |
+
+The complete deployment, transaction, block, gas, lifecycle, and bytecode
+evidence is recorded in
+[`docs/SEPOLIA_DEPLOYMENT.md`](docs/SEPOLIA_DEPLOYMENT.md).
 
 Use two new test-only wallets: account 0 is the administrator/deployer and
 account 1 is the sample issuer. Neither may be a personal or mainnet wallet.
@@ -117,9 +130,8 @@ complete setup, wallet, CI, preflight, and safety requirements are in
 [`docs/SEPOLIA_PREPARATION.md`](docs/SEPOLIA_PREPARATION.md).
 The local Stage 10 checks are recorded in
 [`docs/STAGE10_VALIDATION.md`](docs/STAGE10_VALIDATION.md).
-
-Do not run either Sepolia npm command until Stage 10 has an independent `PASS`
-review for the exact candidate revision and Stage 11 is explicitly approved.
+The deployment commands remain available for reproducibility, but must not be
+rerun against Sepolia without a new explicitly approved deployment operation.
 
 ## Contract roles
 
@@ -192,20 +204,21 @@ not be treated as exact wall-clock proof.
 contracts/PramaanChain.sol       Smart contract
 test/PramaanChain.test.js        Complete automated test suite
 scripts/deploy.js                Local deployment-only script
-scripts/demo.js                  Checked local lifecycle demonstration
+scripts/demo.js                  Checked local or Sepolia lifecycle demonstration
 docs/CONTRACT_DESIGN.md          Detailed contract specification
 docs/BACKEND_HANDOFF.md          Later-integration reference
 docs/STAGE8_DEMONSTRATION.md     Captured local execution evidence
 docs/STAGE9_VALIDATION.md        Clean-install and handoff validation evidence
 docs/SEPOLIA_PREPARATION.md      Stage 10 network and secret preparation
 docs/STAGE10_VALIDATION.md       Stage 10 local validation evidence
+docs/SEPOLIA_DEPLOYMENT.md       Stage 11 public testnet deployment evidence
 hardhat.config.js                Hardhat and Solidity configuration
 ```
 
 ## Deferred work
 
-Sepolia deployment and Etherscan verification are prepared but have not been
-executed. The following remain deferred:
+Sepolia deployment and Etherscan verification are complete. The following
+remain deferred:
 
 - Ethereum mainnet or production EVM deployment;
 - backend integration, REST APIs, or database integration;
