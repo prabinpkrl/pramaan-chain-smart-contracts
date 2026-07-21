@@ -11,7 +11,9 @@ management, issuer management, certificate issuance, lookup, verification,
 permanent revocation, and systematic contract test coverage. Stage 8 adds a
 repeatable deployment and full-flow demonstration on a local Hardhat node.
 Stage 9 adds the clean-install guide and backend handoff documentation without
-changing the approved contract behavior.
+changing the approved contract behavior. Stage 10 prepares a guarded Sepolia
+configuration and independent review process, also without changing the
+contract behavior.
 
 The contract stores certificate proof and blockchain metadata only. Document
 contents, citizen information, detailed revocation reasons, and other personal

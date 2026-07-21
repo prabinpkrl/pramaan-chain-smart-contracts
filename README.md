@@ -5,9 +5,9 @@ anchor SHA-256 document hashes, and anyone can read whether a hash is unknown,
 active, or permanently revoked. The contract never receives or stores the
 certificate file or citizen information.
 
-This repository currently supports development and demonstration on a local
-Hardhat blockchain only. It has not been deployed to a public testnet or
-production network.
+The local implementation and demonstration are complete. Sepolia configuration
+is prepared for an independently reviewed future deployment, but no public
+testnet or production deployment has occurred.
 
 ## Requirements
 
@@ -49,6 +49,8 @@ ignored by Git, so compile before attempting to load it.
 | `npm run local:node` | Start a persistent local Hardhat JSON-RPC node |
 | `npm run local:deploy` | Deploy a fresh contract to the running local node |
 | `npm run local:demo` | Run the full checked local certificate lifecycle |
+| `npm run sepolia:deploy-demo` | Stage 11 only: deploy and run the synthetic lifecycle on Sepolia |
+| `npm run sepolia:verify -- <address>` | Stage 11 only: verify the deployed address on Etherscan |
 
 ## Local deployment
 
@@ -88,6 +90,36 @@ Hardhat development accounts, addresses, transactions, and contract state are
 temporary. Stopping and restarting the local node resets the chain. Never use
 the printed development private keys on a public network or fund those
 addresses with real assets.
+
+## Sepolia preparation
+
+Sepolia is configured as an HTTP layer-1 network with chain ID `11155111`.
+Configuration values are lazy, so local compilation, tests, and demonstrations
+do not require Sepolia secrets.
+
+Use two new test-only wallets: account 0 is the administrator/deployer and
+account 1 is the sample issuer. Neither may be a personal or mainnet wallet.
+The administrator wallet is controlled by the blockchain lead, and private
+keys must never be shared, printed, or committed.
+
+The preferred local setup uses Hardhat's encrypted keystore:
+
+```bash
+npx hardhat keystore set SEPOLIA_RPC_URL
+npx hardhat keystore set DEPLOYER_PRIVATE_KEY
+npx hardhat keystore set ISSUER_PRIVATE_KEY
+npx hardhat keystore set ETHERSCAN_API_KEY
+```
+
+Exported environment variables, a gitignored `.env`, and GitHub repository
+secrets use the same names. `.env.example` contains placeholders only. The
+complete setup, wallet, CI, preflight, and safety requirements are in
+[`docs/SEPOLIA_PREPARATION.md`](docs/SEPOLIA_PREPARATION.md).
+The local Stage 10 checks are recorded in
+[`docs/STAGE10_VALIDATION.md`](docs/STAGE10_VALIDATION.md).
+
+Do not run either Sepolia npm command until Stage 10 has an independent `PASS`
+review for the exact candidate revision and Stage 11 is explicitly approved.
 
 ## Contract roles
 
@@ -165,20 +197,22 @@ docs/CONTRACT_DESIGN.md          Detailed contract specification
 docs/BACKEND_HANDOFF.md          Later-integration reference
 docs/STAGE8_DEMONSTRATION.md     Captured local execution evidence
 docs/STAGE9_VALIDATION.md        Clean-install and handoff validation evidence
+docs/SEPOLIA_PREPARATION.md      Stage 10 network and secret preparation
+docs/STAGE10_VALIDATION.md       Stage 10 local validation evidence
 hardhat.config.js                Hardhat and Solidity configuration
 ```
 
 ## Deferred work
 
-The following are not implemented in this local contract roadmap:
+Sepolia deployment and Etherscan verification are prepared but have not been
+executed. The following remain deferred:
 
-- public EVM testnet or production deployment;
-- block-explorer verification;
+- Ethereum mainnet or production EVM deployment;
 - backend integration, REST APIs, or database integration;
 - frontend, QR-code, citizen registration, login, wallet, or delivery features;
 - document storage or citizen ownership proof;
 - production key management through KMS, HSM, or Vault;
-- production monitoring and administrator governance or recovery;
+- production monitoring, multisignature control, and administrator recovery;
 - proxies, upgradeability, pausing, or batch issuance; and
 - zero-knowledge proofs.
 

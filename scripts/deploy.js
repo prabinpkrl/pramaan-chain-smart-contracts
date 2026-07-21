@@ -1,8 +1,14 @@
 import { network } from "hardhat";
+import { assertExpectedChainId } from "./network-safety.js";
 
 const { ethers, networkName } = await network.create();
 const [administrator] = await ethers.getSigners();
 const chain = await ethers.provider.getNetwork();
+
+if (administrator === undefined) {
+  throw new Error("An administrator signer is required for deployment");
+}
+assertExpectedChainId(networkName, chain.chainId);
 
 const contract = await ethers.deployContract("PramaanChain");
 await contract.waitForDeployment();

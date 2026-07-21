@@ -3,8 +3,9 @@
 ## 1. Scope
 
 This document describes the interface that a later backend service will use.
-It does not implement that backend and does not define a public testnet or
-production deployment.
+It does not implement that backend. Sepolia is selected for future staging and
+configured in Stage 10, but no public contract address exists yet and no
+production network is defined.
 
 The contract accepts only SHA-256 document hashes and stores non-sensitive
 blockchain metadata. Original documents and all personal information remain
@@ -21,6 +22,18 @@ off-chain.
 | Contract address | Read `contractAddress` from each `npm run local:deploy` or `npm run local:demo` result |
 | Full artifact | `artifacts/contracts/PramaanChain.sol/PramaanChain.json` |
 | ABI | The artifact's `abi` property |
+
+Prepared Sepolia connection metadata:
+
+| Item | Stage 10 value |
+| --- | --- |
+| Network | `sepolia` |
+| Chain ID | `11155111` |
+| RPC configuration | `SEPOLIA_RPC_URL` secret; no credentialed URL is committed |
+| Signer 0 | Dedicated test-only administrator/deployer |
+| Signer 1 | Separate dedicated test-only issuer |
+| Contract address | Not available until the separately approved Stage 11 deployment |
+| Source verification | Etherscan, required after Stage 11 deployment |
 
 There is no permanent contract address yet. The address in the Stage 8 evidence
 belongs to a temporary local chain and is not integration configuration for a
@@ -248,10 +261,11 @@ Vault, or equivalent design.
 
 ## 12. Known limitations and deferred work
 
-The completed component is a local, non-upgradeable proof registry. It does not
-include:
+The completed component is a local, non-upgradeable proof registry with
+prepared Sepolia configuration. It does not yet include:
 
-- EVM testnet or production deployment and block-explorer verification;
+- an executed Sepolia deployment or Etherscan-verified public address;
+- Ethereum mainnet or production deployment;
 - backend implementation, REST APIs, databases, or transaction queues;
 - frontend applications or QR-code generation and scanning;
 - citizen registration, authentication, wallet, delivery, or ownership proof;
@@ -262,6 +276,6 @@ include:
 - batch issuance; or
 - zero-knowledge proofs.
 
-Network selection, production signing, administrator governance, QR payloads,
-citizen workflows, ownership proof, and any future contract extensions require
-separate design approval.
+Production network selection, production signing, administrator governance,
+QR payloads, citizen workflows, ownership proof, and any future contract
+extensions require separate design approval.

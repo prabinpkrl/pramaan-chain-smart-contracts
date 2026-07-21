@@ -1,4 +1,5 @@
 import { network } from "hardhat";
+import { assertExpectedChainId } from "./network-safety.js";
 
 const STATUS = {
   NOT_FOUND: 0n,
@@ -7,10 +8,20 @@ const STATUS = {
 };
 
 const { ethers, networkName } = await network.create();
-const [administrator, issuer] = await ethers.getSigners();
+const signers = await ethers.getSigners();
+if (signers.length < 2) {
+  throw new Error("Distinct administrator and issuer signers are required");
+}
+
+const [administrator, issuer] = signers;
 const administratorAddress = await administrator.getAddress();
 const issuerAddress = await issuer.getAddress();
 const chain = await ethers.provider.getNetwork();
+
+assertExpectedChainId(networkName, chain.chainId);
+if (administratorAddress.toLowerCase() === issuerAddress.toLowerCase()) {
+  throw new Error("Administrator and issuer addresses must be different");
+}
 
 const contract = await ethers.deployContract("PramaanChain");
 await contract.waitForDeployment();
@@ -30,9 +41,11 @@ if (authorizationReceipt === null) {
   throw new Error("Issuer authorization transaction was not confirmed");
 }
 
-const documentHash = ethers.sha256(
-  ethers.toUtf8Bytes("PramaanChain Stage 8 synthetic certificate"),
-);
+const syntheticLabel =
+  networkName === "sepolia"
+    ? "PramaanChain Stage 11 Sepolia synthetic certificate"
+    : "PramaanChain Stage 8 synthetic certificate";
+const documentHash = ethers.sha256(ethers.toUtf8Bytes(syntheticLabel));
 const issuanceTransaction = await contract
   .connect(issuer)
   .issueCertificate(documentHash);
