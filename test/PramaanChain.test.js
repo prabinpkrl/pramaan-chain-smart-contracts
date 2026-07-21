@@ -7,6 +7,13 @@ function syntheticDocumentHash(label) {
   return ethers.sha256(ethers.toUtf8Bytes(label));
 }
 
+function parameterNames(parameters) {
+  return parameters.flatMap((parameter) => [
+    parameter.name,
+    ...parameterNames(parameter.components ?? []),
+  ]);
+}
+
 async function deployPramaanChain() {
   const [administrator, issuer, otherAccount] = await ethers.getSigners();
   const contract = await ethers.deployContract("PramaanChain");
@@ -318,6 +325,389 @@ describe("PramaanChain", function () {
       )
         .to.be.revertedWithCustomError(contract, "CertificateAlreadyExists")
         .withArgs(documentHash);
+    });
+  });
+
+  describe("certificate lookup and verification", function () {
+    it("returns the complete active record with its transaction block timestamp", async function () {
+      const { contract, issuer, issuerAddress } = await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-5-certificate-1");
+      await contract.authorizeIssuer(issuerAddress);
+      const transaction = await contract
+        .connect(issuer)
+        .issueCertificate(documentHash);
+      const receipt = await transaction.wait();
+      const block = await ethers.provider.getBlock(receipt.blockNumber);
+
+      const certificate = await contract.getCertificate(documentHash);
+
+      expect(certificate.issuer).to.equal(issuerAddress);
+      expect(certificate.issuedAt).to.equal(BigInt(block.timestamp));
+      expect(certificate.revokedAt).to.equal(0n);
+      expect(certificate.status).to.equal(1n);
+    });
+
+    it("returns ACTIVE to any account for an issued hash", async function () {
+      const { contract, issuer, issuerAddress, otherAccount } =
+        await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-5-certificate-2");
+      await contract.authorizeIssuer(issuerAddress);
+      await contract.connect(issuer).issueCertificate(documentHash);
+
+      expect(
+        await contract.connect(otherAccount).verifyCertificate(documentHash),
+      ).to.equal(1n);
+    });
+
+    it("returns a default record and NOT_FOUND for an unknown hash", async function () {
+      const { contract } = await deployPramaanChain();
+      const unknownHash = syntheticDocumentHash("stage-5-unknown-certificate");
+
+      const certificate = await contract.getCertificate(unknownHash);
+
+      expect(certificate.issuer).to.equal(ethers.ZeroAddress);
+      expect(certificate.issuedAt).to.equal(0n);
+      expect(certificate.revokedAt).to.equal(0n);
+      expect(certificate.status).to.equal(0n);
+      expect(await contract.verifyCertificate(unknownHash)).to.equal(0n);
+    });
+
+    it("returns a default record and NOT_FOUND for the zero hash", async function () {
+      const { contract } = await deployPramaanChain();
+
+      const certificate = await contract.getCertificate(ethers.ZeroHash);
+
+      expect(certificate.issuer).to.equal(ethers.ZeroAddress);
+      expect(certificate.issuedAt).to.equal(0n);
+      expect(certificate.revokedAt).to.equal(0n);
+      expect(certificate.status).to.equal(0n);
+      expect(await contract.verifyCertificate(ethers.ZeroHash)).to.equal(0n);
+    });
+
+    it("supports verification through a provider-only contract", async function () {
+      const { contract, issuer, issuerAddress } = await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-5-certificate-3");
+      await contract.authorizeIssuer(issuerAddress);
+      await contract.connect(issuer).issueCertificate(documentHash);
+      const readOnlyContract = new ethers.Contract(
+        await contract.getAddress(),
+        contract.interface,
+        ethers.provider,
+      );
+
+      expect(await readOnlyContract.verifyCertificate(documentHash)).to.equal(
+        1n,
+      );
+      expect((await readOnlyContract.getCertificate(documentHash)).issuer).to.equal(
+        issuerAddress,
+      );
+    });
+
+    it("keeps an issued certificate active after its issuer is removed", async function () {
+      const { contract, issuer, issuerAddress } = await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-5-certificate-4");
+      await contract.authorizeIssuer(issuerAddress);
+      await contract.connect(issuer).issueCertificate(documentHash);
+
+      await contract.removeIssuer(issuerAddress);
+
+      const certificate = await contract.getCertificate(documentHash);
+      expect(certificate.issuer).to.equal(issuerAddress);
+      expect(certificate.status).to.equal(1n);
+      expect(await contract.verifyCertificate(documentHash)).to.equal(1n);
+    });
+
+    it("declares both public read functions as view", async function () {
+      const { contract } = await deployPramaanChain();
+
+      expect(
+        contract.interface.getFunction("getCertificate").stateMutability,
+      ).to.equal("view");
+      expect(
+        contract.interface.getFunction("verifyCertificate").stateMutability,
+      ).to.equal("view");
+    });
+  });
+
+  describe("certificate revocation", function () {
+    it("allows the original issuer to revoke permanently with the block timestamp", async function () {
+      const { contract, issuer, issuerAddress } = await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-6-certificate-1");
+      await contract.authorizeIssuer(issuerAddress);
+      const issuance = await contract
+        .connect(issuer)
+        .issueCertificate(documentHash);
+      const issuanceReceipt = await issuance.wait();
+      const issuanceBlock = await ethers.provider.getBlock(
+        issuanceReceipt.blockNumber,
+      );
+
+      const revocation = await contract
+        .connect(issuer)
+        .revokeCertificate(documentHash);
+      const revocationReceipt = await revocation.wait();
+      const revocationBlock = await ethers.provider.getBlock(
+        revocationReceipt.blockNumber,
+      );
+
+      await expect(revocation)
+        .to.emit(contract, "CertificateRevoked")
+        .withArgs(
+          documentHash,
+          issuerAddress,
+          issuerAddress,
+          BigInt(revocationBlock.timestamp),
+        );
+      const certificate = await contract.getCertificate(documentHash);
+      expect(certificate.issuer).to.equal(issuerAddress);
+      expect(certificate.issuedAt).to.equal(BigInt(issuanceBlock.timestamp));
+      expect(certificate.revokedAt).to.equal(
+        BigInt(revocationBlock.timestamp),
+      );
+      expect(certificate.status).to.equal(2n);
+      expect(await contract.verifyCertificate(documentHash)).to.equal(2n);
+    });
+
+    it("allows the administrator to revoke any certificate", async function () {
+      const { contract, administratorAddress, issuer, issuerAddress } =
+        await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-6-certificate-2");
+      await contract.authorizeIssuer(issuerAddress);
+      await contract.connect(issuer).issueCertificate(documentHash);
+
+      const revocation = await contract.revokeCertificate(documentHash);
+      const receipt = await revocation.wait();
+      const block = await ethers.provider.getBlock(receipt.blockNumber);
+
+      await expect(revocation)
+        .to.emit(contract, "CertificateRevoked")
+        .withArgs(
+          documentHash,
+          issuerAddress,
+          administratorAddress,
+          BigInt(block.timestamp),
+        );
+      expect(await contract.verifyCertificate(documentHash)).to.equal(2n);
+    });
+
+    it("rejects an unrelated authorized issuer", async function () {
+      const {
+        contract,
+        issuer,
+        issuerAddress,
+        otherAccount,
+        otherAccountAddress,
+      } = await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-6-certificate-3");
+      await contract.authorizeIssuer(issuerAddress);
+      await contract.authorizeIssuer(otherAccountAddress);
+      await contract.connect(issuer).issueCertificate(documentHash);
+
+      await expect(
+        contract.connect(otherAccount).revokeCertificate(documentHash),
+      )
+        .to.be.revertedWithCustomError(contract, "UnauthorizedRevoker")
+        .withArgs(otherAccountAddress, documentHash);
+      expect(await contract.verifyCertificate(documentHash)).to.equal(1n);
+    });
+
+    it("rejects a public account", async function () {
+      const {
+        contract,
+        issuer,
+        issuerAddress,
+        otherAccount,
+        otherAccountAddress,
+      } = await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-6-certificate-4");
+      await contract.authorizeIssuer(issuerAddress);
+      await contract.connect(issuer).issueCertificate(documentHash);
+
+      await expect(
+        contract.connect(otherAccount).revokeCertificate(documentHash),
+      )
+        .to.be.revertedWithCustomError(contract, "UnauthorizedRevoker")
+        .withArgs(otherAccountAddress, documentHash);
+    });
+
+    it("rejects an unknown hash before checking caller authorization", async function () {
+      const { contract, otherAccount } = await deployPramaanChain();
+      const unknownHash = syntheticDocumentHash("stage-6-unknown-certificate");
+
+      await expect(
+        contract.connect(otherAccount).revokeCertificate(unknownHash),
+      )
+        .to.be.revertedWithCustomError(contract, "CertificateNotFound")
+        .withArgs(unknownHash);
+    });
+
+    it("rejects the zero hash as a missing certificate", async function () {
+      const { contract } = await deployPramaanChain();
+
+      await expect(contract.revokeCertificate(ethers.ZeroHash))
+        .to.be.revertedWithCustomError(contract, "CertificateNotFound")
+        .withArgs(ethers.ZeroHash);
+    });
+
+    it("rejects repeated revocation and preserves the original timestamp", async function () {
+      const { contract, issuer, issuerAddress, otherAccount } =
+        await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-6-certificate-5");
+      await contract.authorizeIssuer(issuerAddress);
+      await contract.connect(issuer).issueCertificate(documentHash);
+      await contract.connect(issuer).revokeCertificate(documentHash);
+      const originalRecord = await contract.getCertificate(documentHash);
+
+      await expect(
+        contract.connect(otherAccount).revokeCertificate(documentHash),
+      )
+        .to.be.revertedWithCustomError(contract, "CertificateAlreadyRevoked")
+        .withArgs(documentHash);
+      const unchangedRecord = await contract.getCertificate(documentHash);
+      expect(unchangedRecord.revokedAt).to.equal(originalRecord.revokedAt);
+      expect(unchangedRecord.status).to.equal(2n);
+    });
+
+    it("allows a removed original issuer to revoke its earlier certificate", async function () {
+      const { contract, issuer, issuerAddress } = await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-6-certificate-6");
+      await contract.authorizeIssuer(issuerAddress);
+      await contract.connect(issuer).issueCertificate(documentHash);
+      await contract.removeIssuer(issuerAddress);
+
+      await contract.connect(issuer).revokeCertificate(documentHash);
+
+      expect(await contract.isAuthorizedIssuer(issuerAddress)).to.equal(false);
+      expect(await contract.verifyCertificate(documentHash)).to.equal(2n);
+    });
+
+    it("keeps a revoked hash permanently reserved against reissuance", async function () {
+      const { contract, issuer, issuerAddress } = await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-6-certificate-7");
+      await contract.authorizeIssuer(issuerAddress);
+      await contract.connect(issuer).issueCertificate(documentHash);
+      await contract.connect(issuer).revokeCertificate(documentHash);
+
+      await expect(contract.connect(issuer).issueCertificate(documentHash))
+        .to.be.revertedWithCustomError(contract, "CertificateAlreadyExists")
+        .withArgs(documentHash);
+      expect(await contract.verifyCertificate(documentHash)).to.equal(2n);
+    });
+  });
+
+  describe("interface, immutability, and privacy", function () {
+    it("uses the documented NOT_FOUND, ACTIVE, and REVOKED status ordering", async function () {
+      const { contract, issuer, issuerAddress } = await deployPramaanChain();
+      const documentHash = syntheticDocumentHash("stage-7-certificate-1");
+      const unknownHash = syntheticDocumentHash("stage-7-unknown-certificate");
+      await contract.authorizeIssuer(issuerAddress);
+
+      expect(await contract.verifyCertificate(unknownHash)).to.equal(0n);
+
+      await contract.connect(issuer).issueCertificate(documentHash);
+      expect(await contract.verifyCertificate(documentHash)).to.equal(1n);
+
+      await contract.connect(issuer).revokeCertificate(documentHash);
+      expect(await contract.verifyCertificate(documentHash)).to.equal(2n);
+    });
+
+    it("exposes only the approved fields in the certificate record", async function () {
+      const { contract } = await deployPramaanChain();
+      const getCertificate = contract.interface.getFunction("getCertificate");
+      const record = getCertificate.outputs[0];
+
+      expect(record.baseType).to.equal("tuple");
+      expect(
+        record.components.map((component) => [
+          component.name,
+          component.type,
+        ]),
+      ).to.deep.equal([
+        ["issuer", "address"],
+        ["issuedAt", "uint64"],
+        ["revokedAt", "uint64"],
+        ["status", "uint8"],
+      ]);
+    });
+
+    it("defines the required domain event fields and indexing", async function () {
+      const { contract } = await deployPramaanChain();
+      const expectedEvents = {
+        IssuerAuthorized: [
+          ["issuer", "address", true],
+          ["administrator", "address", true],
+        ],
+        IssuerRemoved: [
+          ["issuer", "address", true],
+          ["administrator", "address", true],
+        ],
+        CertificateIssued: [
+          ["documentHash", "bytes32", true],
+          ["issuer", "address", true],
+          ["issuedAt", "uint64", false],
+        ],
+        CertificateRevoked: [
+          ["documentHash", "bytes32", true],
+          ["issuer", "address", true],
+          ["revokedBy", "address", true],
+          ["revokedAt", "uint64", false],
+        ],
+      };
+
+      for (const [eventName, expectedInputs] of Object.entries(
+        expectedEvents,
+      )) {
+        const event = contract.interface.getEvent(eventName);
+        const actualInputs = event.inputs.map((input) => [
+          input.name,
+          input.type,
+          input.indexed,
+        ]);
+
+        expect(actualInputs).to.deep.equal(expectedInputs);
+      }
+    });
+
+    it("contains no personal-data or certificate-editing surface in the ABI", async function () {
+      const { contract } = await deployPramaanChain();
+      const interfaceNames = contract.interface.fragments
+        .flatMap((fragment) => [
+          fragment.name,
+          ...parameterNames(fragment.inputs ?? []),
+          ...parameterNames(fragment.outputs ?? []),
+        ])
+        .join(" ")
+        .toLowerCase();
+      const forbiddenPersonalDataTerms = [
+        "citizen",
+        "citizenship",
+        "birth",
+        "phone",
+        "email",
+        "homeaddress",
+        "certificatefile",
+        "marks",
+        "contents",
+        "revocationreason",
+      ];
+      const forbiddenMutationFunctions = [
+        "updateCertificate",
+        "editCertificate",
+        "deleteCertificate",
+        "reactivateCertificate",
+        "restoreCertificate",
+        "unrevokeCertificate",
+      ];
+      const functionNames = contract.interface.fragments
+        .filter((fragment) => fragment.type === "function")
+        .map((fragment) => fragment.name);
+
+      for (const forbiddenTerm of forbiddenPersonalDataTerms) {
+        expect(interfaceNames).not.to.include(forbiddenTerm);
+      }
+      for (const forbiddenFunction of forbiddenMutationFunctions) {
+        expect(functionNames).not.to.include(forbiddenFunction);
+      }
     });
   });
 });

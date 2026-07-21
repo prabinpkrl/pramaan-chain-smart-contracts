@@ -6,10 +6,9 @@ This document is the Stage 2 design specification for the `PramaanChain`
 certificate registry. It defines the contract behavior to be implemented in
 Stages 3 through 6 and fully tested in Stage 7.
 
-Stage 2 did not implement this behavior. Stages 3 and 4 now implement role
-management, issuer management, and certificate issuance. Certificate lookup,
-verification, and revocation remain unimplemented until their corresponding
-stages are approved.
+Stage 2 did not implement this behavior. Stages 3 through 7 now implement role
+management, issuer management, certificate issuance, lookup, verification,
+permanent revocation, and systematic contract test coverage.
 
 The contract stores certificate proof and blockchain metadata only. Document
 contents, citizen information, detailed revocation reasons, and other personal

@@ -4,8 +4,7 @@ pragma solidity ^0.8.28;
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 
 /// @title PramaanChain
-/// @notice Certificate issuance foundation for the PramaanChain registry.
-/// @dev Certificate lookup, verification, and revocation are added in later stages.
+/// @notice Certificate issuance and verification registry for PramaanChain.
 contract PramaanChain is AccessControl {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant ISSUER_ROLE = keccak256("ISSUER_ROLE");
@@ -30,11 +29,20 @@ contract PramaanChain is AccessControl {
     error IssuerNotAuthorized(address issuer);
     error InvalidDocumentHash();
     error CertificateAlreadyExists(bytes32 documentHash);
+    error CertificateNotFound(bytes32 documentHash);
+    error CertificateAlreadyRevoked(bytes32 documentHash);
+    error UnauthorizedRevoker(address account, bytes32 documentHash);
     error DirectRoleManagementDisabled();
 
     event IssuerAuthorized(address indexed issuer, address indexed administrator);
     event IssuerRemoved(address indexed issuer, address indexed administrator);
     event CertificateIssued(bytes32 indexed documentHash, address indexed issuer, uint64 issuedAt);
+    event CertificateRevoked(
+        bytes32 indexed documentHash,
+        address indexed issuer,
+        address indexed revokedBy,
+        uint64 revokedAt
+    );
 
     constructor() {
         _grantRole(ADMIN_ROLE, _msgSender());
@@ -90,6 +98,39 @@ contract PramaanChain is AccessControl {
         });
 
         emit CertificateIssued(documentHash, _msgSender(), issuedAt);
+    }
+
+    /// @notice Returns the non-sensitive blockchain record for a certificate hash.
+    function getCertificate(bytes32 documentHash) external view returns (Certificate memory) {
+        return _certificates[documentHash];
+    }
+
+    /// @notice Returns whether a certificate hash is unknown, active, or revoked.
+    function verifyCertificate(bytes32 documentHash) external view returns (CertificateStatus) {
+        return _certificates[documentHash].status;
+    }
+
+    /// @notice Permanently revokes an issued certificate.
+    function revokeCertificate(bytes32 documentHash) external {
+        Certificate storage certificate = _certificates[documentHash];
+
+        if (certificate.status == CertificateStatus.NOT_FOUND) {
+            revert CertificateNotFound(documentHash);
+        }
+        if (certificate.status == CertificateStatus.REVOKED) {
+            revert CertificateAlreadyRevoked(documentHash);
+        }
+
+        address revokedBy = _msgSender();
+        if (revokedBy != certificate.issuer && !hasRole(ADMIN_ROLE, revokedBy)) {
+            revert UnauthorizedRevoker(revokedBy, documentHash);
+        }
+
+        uint64 revokedAt = uint64(block.timestamp);
+        certificate.revokedAt = revokedAt;
+        certificate.status = CertificateStatus.REVOKED;
+
+        emit CertificateRevoked(documentHash, certificate.issuer, revokedBy, revokedAt);
     }
 
     /// @dev Role changes must use the PramaanChain domain functions.
