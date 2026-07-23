@@ -1,0 +1,21 @@
+{
+  "name": "pramaan-chain-backend",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Backend API for PramaanChain certificate verification on Sepolia",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.17.0",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0"
+  }
+}
