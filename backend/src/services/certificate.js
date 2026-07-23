@@ -1,5 +1,6 @@
-import { getReadContract, getWriteContract, statusToName } from "./blockchain.js";
+import { getReadContract, getWriteContract, getIssuerAddress, statusToName } from "./blockchain.js";
 import { validateDocumentHash } from "../utils/hash.js";
+import { addRecord, updateRecordStatus } from "./certificateIndex.js";
 
 const CONFIRMATIONS = Number(process.env.BLOCKCHAIN_CONFIRMATIONS || "2");
 
@@ -65,6 +66,19 @@ export async function issueCertificate(documentHash) {
     throw new Error("Issued certificate did not resolve to ACTIVE");
   }
 
+  addRecord(documentHash, {
+    documentHash,
+    status: "ACTIVE",
+    issuer: getIssuerAddress(),
+    issuedAt: Math.floor(Date.now() / 1000),
+    revokedAt: 0,
+    issueTxHash: receipt.transactionHash,
+    issueBlockNumber: receipt.blockNumber,
+    revokeTxHash: null,
+    revokeBlockNumber: null,
+    revokedBy: null,
+  });
+
   return {
     ...receipt,
     documentHash,
@@ -78,7 +92,6 @@ export async function revokeCertificate(documentHash) {
   const writeContract = getWriteContract();
 
   const record = await contract.getCertificate(documentHash);
-  const { getIssuerAddress } = await import("./blockchain.js");
   const signerAddress = getIssuerAddress();
 
   if (record.issuer.toLowerCase() !== signerAddress.toLowerCase()) {
@@ -93,6 +106,14 @@ export async function revokeCertificate(documentHash) {
   if (status !== 2n) {
     throw new Error("Revoked certificate did not resolve to REVOKED");
   }
+
+  updateRecordStatus(documentHash, {
+    status: "REVOKED",
+    revokedAt: Math.floor(Date.now() / 1000),
+    revokeTxHash: receipt.transactionHash,
+    revokeBlockNumber: receipt.blockNumber,
+    revokedBy: signerAddress,
+  });
 
   return {
     ...receipt,
