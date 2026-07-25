@@ -5,7 +5,12 @@ export const readLimiter = rateLimit({
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many requests, please try again later" },
+  message: {
+    error: {
+      code: "READ_RATE_LIMIT_EXCEEDED",
+      message: "Too many requests, please try again later",
+    },
+  },
 });
 
 export const writeLimiter = rateLimit({
@@ -13,5 +18,10 @@ export const writeLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many write requests, please try again later" },
+  message: {
+    error: {
+      code: "WRITE_RATE_LIMIT_EXCEEDED",
+      message: "Too many write requests, please try again later",
+    },
+  },
 });

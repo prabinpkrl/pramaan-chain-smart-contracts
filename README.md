@@ -175,6 +175,29 @@ limitations are in
 The clean-install walkthrough result is recorded in
 [`docs/STAGE9_VALIDATION.md`](docs/STAGE9_VALIDATION.md).
 
+## Sepolia backend gateway
+
+The `defy` branch includes an Express and ethers.js prototype gateway in
+`backend/`. It provides provider-only verification, confirmed certificate
+and event queries, and protected issuer write endpoints.
+
+```bash
+cd backend
+npm ci
+cp .env.example .env
+# Fill the gitignored file with test-only configuration.
+npm test
+npm start
+```
+
+Writes fail closed unless the expected issuer address, test-only issuer key,
+and a server-side `WRITE_API_KEY` are configured. Every write also requires a
+unique `Idempotency-Key`. The API key is a server-to-server prototype control
+and must never be embedded in frontend code. Current API configuration,
+security rules, requests, responses, and limitations are documented in
+[`docs/BACKEND_API.md`](docs/BACKEND_API.md) and
+[`docs/BACKEND_SAMPLES.md`](docs/BACKEND_SAMPLES.md).
+
 ## Document hashing
 
 Hash the exact raw certificate bytes with SHA-256 off-chain. The result must be
@@ -203,6 +226,8 @@ not be treated as exact wall-clock proof.
 ```text
 contracts/PramaanChain.sol       Smart contract
 test/PramaanChain.test.js        Complete automated test suite
+backend/src/                     Sepolia backend gateway
+backend/test/                    Backend unit and API tests
 scripts/deploy.js                Local deployment-only script
 scripts/demo.js                  Checked local or Sepolia lifecycle demonstration
 docs/CONTRACT_DESIGN.md          Detailed contract specification
@@ -221,7 +246,7 @@ Sepolia deployment and Etherscan verification are complete. The following
 remain deferred:
 
 - Ethereum mainnet or production EVM deployment;
-- backend integration, REST APIs, or database integration;
+- full citizen/institution backend, database, sessions, and durable queue;
 - frontend, QR-code, citizen registration, login, wallet, or delivery features;
 - document storage or citizen ownership proof;
 - production key management through KMS, HSM, or Vault;

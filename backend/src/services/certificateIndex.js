@@ -1,64 +1,170 @@
+import { getBlockchainConfig } from "../config.js";
 import { getProvider, getReadContract } from "./blockchain.js";
-
-const START_BLOCK = BigInt(process.env.PRAMAAN_CHAIN_START_BLOCK || "11318772");
-const CONFIRMATIONS = Number(process.env.BLOCKCHAIN_CONFIRMATIONS || "2");
+import { getConfirmedHead } from "../utils/blocks.js";
+import { redactSecrets } from "../utils/redact.js";
 
 const certificates = new Map();
 let indexReady = false;
+let lastProcessedBlock = null;
+let lastProcessedBlockHash = null;
+let syncPromise = null;
+let pollTimer = null;
 
-export async function buildIndex() {
+function applyIssued(log, contract) {
+  const parsed = contract.interface.parseLog(log);
+  if (!parsed) return;
+
+  const hash = parsed.args.documentHash;
+  certificates.set(hash.toLowerCase(), {
+    documentHash: hash,
+    status: "ACTIVE",
+    issuer: parsed.args.issuer,
+    issuedAt: Number(parsed.args.issuedAt),
+    revokedAt: 0,
+    issueTxHash: log.transactionHash,
+    issueBlockNumber: Number(log.blockNumber),
+    revokeTxHash: null,
+    revokeBlockNumber: null,
+    revokedBy: null,
+  });
+}
+
+function applyRevoked(log, contract) {
+  const parsed = contract.interface.parseLog(log);
+  if (!parsed) return;
+
+  const hash = parsed.args.documentHash.toLowerCase();
+  const record = certificates.get(hash);
+  if (!record) return;
+
+  Object.assign(record, {
+    status: "REVOKED",
+    revokedAt: Number(parsed.args.revokedAt),
+    revokeTxHash: log.transactionHash,
+    revokeBlockNumber: Number(log.blockNumber),
+    revokedBy: parsed.args.revokedBy,
+  });
+}
+
+async function processRange(from, to) {
   const contract = getReadContract();
+  const { eventChunkSize } = getBlockchainConfig();
+
+  for (let chunkFrom = from; chunkFrom <= to; chunkFrom += eventChunkSize) {
+    const chunkTo = Math.min(to, chunkFrom + eventChunkSize - 1);
+    const [issuedLogs, revokedLogs] = await Promise.all([
+      contract.queryFilter(
+        contract.filters.CertificateIssued(),
+        chunkFrom,
+        chunkTo,
+      ),
+      contract.queryFilter(
+        contract.filters.CertificateRevoked(),
+        chunkFrom,
+        chunkTo,
+      ),
+    ]);
+
+    const logs = [
+      ...issuedLogs.map((log) => ({ kind: "issued", log })),
+      ...revokedLogs.map((log) => ({ kind: "revoked", log })),
+    ].sort(
+      (a, b) => a.log.blockNumber - b.log.blockNumber
+        || a.log.index - b.log.index,
+    );
+
+    for (const { kind, log } of logs) {
+      if (kind === "issued") applyIssued(log, contract);
+      else applyRevoked(log, contract);
+    }
+  }
+}
+
+async function synchronize() {
   const provider = getProvider();
+  const { confirmations, startBlock } = getBlockchainConfig();
   const latestBlock = await provider.getBlockNumber();
-  const to = latestBlock - BigInt(CONFIRMATIONS);
+  const safeHead = getConfirmedHead(latestBlock, confirmations);
 
-  if (START_BLOCK > to) {
-    indexReady = true;
-    return;
+  if (lastProcessedBlock !== null && lastProcessedBlock > safeHead) {
+    console.warn("Confirmed chain head moved behind index checkpoint; rebuilding");
+    certificates.clear();
+    indexReady = false;
+    lastProcessedBlock = null;
+    lastProcessedBlockHash = null;
   }
 
-  const issuedFilter = contract.filters.CertificateIssued();
-  const issuedLogs = await contract.queryFilter(issuedFilter, START_BLOCK, to);
-
-  for (const log of issuedLogs) {
-    const parsed = contract.interface.parseLog(log);
-    if (!parsed) continue;
-
-    const hash = parsed.args.documentHash;
-    certificates.set(hash.toLowerCase(), {
-      documentHash: parsed.args.documentHash,
-      status: "ACTIVE",
-      issuer: parsed.args.issuer,
-      issuedAt: Number(parsed.args.issuedAt),
-      revokedAt: 0,
-      issueTxHash: log.transactionHash,
-      issueBlockNumber: Number(log.blockNumber),
-      revokeTxHash: null,
-      revokeBlockNumber: null,
-      revokedBy: null,
-    });
-  }
-
-  const revokedFilter = contract.filters.CertificateRevoked();
-  const revokedLogs = await contract.queryFilter(revokedFilter, START_BLOCK, to);
-
-  for (const log of revokedLogs) {
-    const parsed = contract.interface.parseLog(log);
-    if (!parsed) continue;
-
-    const hash = parsed.args.documentHash.toLowerCase();
-    const record = certificates.get(hash);
-    if (record) {
-      record.status = "REVOKED";
-      record.revokedAt = Number(parsed.args.revokedAt);
-      record.revokeTxHash = log.transactionHash;
-      record.revokeBlockNumber = Number(log.blockNumber);
-      record.revokedBy = parsed.args.revokedBy;
+  if (
+    lastProcessedBlock !== null
+    && lastProcessedBlockHash
+    && lastProcessedBlock <= safeHead
+  ) {
+    const checkpoint = await provider.getBlock(lastProcessedBlock);
+    if (!checkpoint || checkpoint.hash !== lastProcessedBlockHash) {
+      console.warn("Certificate index checkpoint changed; rebuilding index");
+      certificates.clear();
+      indexReady = false;
+      lastProcessedBlock = null;
+      lastProcessedBlockHash = null;
     }
   }
 
+  const from = lastProcessedBlock === null
+    ? startBlock
+    : lastProcessedBlock + 1;
+
+  if (from <= safeHead) {
+    await processRange(from, safeHead);
+    const checkpoint = await provider.getBlock(safeHead);
+    lastProcessedBlock = safeHead;
+    lastProcessedBlockHash = checkpoint?.hash || null;
+  }
+
   indexReady = true;
+  return {
+    size: certificates.size,
+    lastProcessedBlock,
+  };
+}
+
+export function syncIndex() {
+  if (!syncPromise) {
+    syncPromise = synchronize().finally(() => {
+      syncPromise = null;
+    });
+  }
+  return syncPromise;
+}
+
+export async function buildIndex() {
+  certificates.clear();
+  indexReady = false;
+  lastProcessedBlock = null;
+  lastProcessedBlockHash = null;
+
+  const result = await syncIndex();
   console.log(`Certificate index built: ${certificates.size} certificates`);
+  return result;
+}
+
+export function startIndexPolling() {
+  if (pollTimer) return pollTimer;
+  const { indexPollIntervalMs } = getBlockchainConfig();
+
+  pollTimer = setInterval(() => {
+    syncIndex().catch((error) => {
+      console.error(
+        `Certificate index synchronization failed: ${redactSecrets(error.message)}`,
+      );
+    });
+  }, indexPollIntervalMs);
+  pollTimer.unref();
+  return pollTimer;
+}
+
+export function stopIndexPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null;
 }
 
 export function isIndexReady() {
@@ -67,6 +173,14 @@ export function isIndexReady() {
 
 export function getIndexSize() {
   return certificates.size;
+}
+
+export function getIndexState() {
+  return {
+    ready: indexReady,
+    size: certificates.size,
+    lastProcessedBlock,
+  };
 }
 
 export function getSummary() {
@@ -83,13 +197,14 @@ export function queryCertificates({ status, issuer, page, limit }) {
   let results = Array.from(certificates.values());
 
   if (status) {
-    const s = status.toUpperCase();
-    results = results.filter(r => r.status === s);
+    results = results.filter((record) => record.status === status);
   }
 
   if (issuer) {
-    const addr = issuer.toLowerCase();
-    results = results.filter(r => r.issuer.toLowerCase() === addr);
+    const address = issuer.toLowerCase();
+    results = results.filter(
+      (record) => record.issuer.toLowerCase() === address,
+    );
   }
 
   results.sort((a, b) => b.issuedAt - a.issuedAt);
@@ -97,17 +212,12 @@ export function queryCertificates({ status, issuer, page, limit }) {
   const total = results.length;
   const totalPages = Math.ceil(total / limit);
   const start = (page - 1) * limit;
-  const paged = results.slice(start, start + limit);
 
   return {
-    certificates: paged,
+    certificates: results.slice(start, start + limit),
     pagination: { page, limit, total, totalPages },
     summary: getSummary(),
   };
-}
-
-export function getRecordByHash(documentHash) {
-  return certificates.get(documentHash.toLowerCase()) || null;
 }
 
 export function addRecord(documentHash, record) {
@@ -116,7 +226,5 @@ export function addRecord(documentHash, record) {
 
 export function updateRecordStatus(documentHash, updates) {
   const record = certificates.get(documentHash.toLowerCase());
-  if (record) {
-    Object.assign(record, updates);
-  }
+  if (record) Object.assign(record, updates);
 }

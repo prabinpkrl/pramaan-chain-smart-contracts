@@ -141,7 +141,9 @@ BLOCKCHAIN_CHAIN_ID=11155111
 PRAMAAN_CHAIN_ADDRESS=0x0bb21729BBDaBe54A289A1e924941F8F635Cab84
 PRAMAAN_CHAIN_START_BLOCK=11318772
 SEPOLIA_RPC_URL=secret-managed-value
+ISSUER_ADDRESS=expected-public-issuer-address
 ISSUER_PRIVATE_KEY=secret-managed-value-for-write-service-only
+WRITE_API_KEY=long-random-server-to-server-value
 BLOCKCHAIN_CONFIRMATIONS=team-approved-value
 ```
 
@@ -537,11 +539,12 @@ Vault, or equivalent design.
 ## 14. Known limitations and deferred work
 
 The completed blockchain component is a local and Sepolia-deployed,
-non-upgradeable proof registry. This blockchain repository intentionally does
-not contain:
+non-upgradeable proof registry. The `defy` branch also contains a protected
+prototype blockchain gateway. It intentionally does not contain:
 
 - Ethereum mainnet or production deployment;
-- backend implementation, REST APIs, databases, or transaction queues;
+- citizen/institution accounts, database-backed relationships, sessions, or
+  a durable shared transaction queue;
 - frontend applications or QR-code generation and scanning;
 - citizen registration, authentication, wallet, delivery, or ownership proof;
 - certificate/document storage or detailed revocation reasons;

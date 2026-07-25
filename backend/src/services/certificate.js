@@ -1,15 +1,84 @@
-import { getReadContract, getWriteContract, getIssuerAddress, statusToName } from "./blockchain.js";
-import { validateDocumentHash } from "../utils/hash.js";
+import {
+  getReadContract,
+  getWriteContract,
+  getIssuerAddress,
+  requireAuthorizedIssuer,
+  statusToName,
+} from "./blockchain.js";
+import {
+  validateDocumentHash,
+  validateIssuableDocumentHash,
+} from "../utils/hash.js";
 import { addRecord, updateRecordStatus } from "./certificateIndex.js";
+import { getBlockchainConfig } from "../config.js";
+import {
+  HttpError,
+  conflict,
+  forbidden,
+  notFound,
+} from "../utils/httpError.js";
 
-const CONFIRMATIONS = Number(process.env.BLOCKCHAIN_CONFIRMATIONS || "2");
+let writeQueue = Promise.resolve();
+
+function serializeWrite(operation) {
+  const result = writeQueue.then(operation, operation);
+  writeQueue = result.catch(() => undefined);
+  return result;
+}
+
+function findRevertData(error) {
+  return error?.data
+    || error?.error?.data
+    || error?.info?.error?.data
+    || error?.info?.data;
+}
+
+export function mapContractError(error) {
+  if (error instanceof HttpError) return error;
+
+  const contract = getReadContract();
+  let errorName = error?.revert?.name || error?.errorName;
+  const revertData = findRevertData(error);
+
+  if (!errorName && typeof revertData === "string") {
+    try {
+      errorName = contract.interface.parseError(revertData)?.name;
+    } catch {
+      // Preserve the safe generic mapping below.
+    }
+  }
+
+  const mappings = {
+    InvalidDocumentHash: [400, "ZERO_DOCUMENT_HASH", "The zero document hash cannot be issued"],
+    CertificateAlreadyExists: [409, "CERTIFICATE_ALREADY_EXISTS", "Certificate hash has already been issued"],
+    CertificateNotFound: [404, "CERTIFICATE_NOT_FOUND", "Certificate does not exist"],
+    CertificateAlreadyRevoked: [409, "CERTIFICATE_ALREADY_REVOKED", "Certificate is already revoked"],
+    UnauthorizedRevoker: [403, "UNAUTHORIZED_REVOKER", "Configured signer cannot revoke this certificate"],
+    AccessControlUnauthorizedAccount: [403, "ISSUER_NOT_AUTHORIZED", "Configured issuer is not authorized"],
+  };
+
+  const mapping = mappings[errorName];
+  if (mapping) return new HttpError(...mapping);
+
+  return new HttpError(
+    502,
+    "BLOCKCHAIN_OPERATION_FAILED",
+    "Blockchain operation failed",
+  );
+}
 
 async function waitForReceipt(transactionPromise) {
+  const { confirmations } = getBlockchainConfig();
   const transaction = await transactionPromise;
-  const receipt = await transaction.wait(CONFIRMATIONS);
+  const receipt = await transaction.wait(confirmations);
 
   if (receipt === null || receipt.status !== 1) {
-    throw new Error(`Blockchain transaction failed: ${transaction.hash}`);
+    throw new HttpError(
+      502,
+      "BLOCKCHAIN_TRANSACTION_FAILED",
+      "Blockchain transaction did not confirm successfully",
+      { transactionHash: transaction.hash },
+    );
   }
 
   return {
@@ -53,73 +122,123 @@ export async function getCertificate(documentHash) {
 }
 
 export async function issueCertificate(documentHash) {
-  validateDocumentHash(documentHash);
-  const contract = getReadContract();
-  const writeContract = getWriteContract();
+  validateIssuableDocumentHash(documentHash);
 
-  const receipt = await waitForReceipt(
-    writeContract.issueCertificate(documentHash),
-  );
+  return serializeWrite(async () => {
+    const contract = getReadContract();
+    const writeContract = getWriteContract();
+    await requireAuthorizedIssuer();
 
-  const status = await contract.verifyCertificate(documentHash);
-  if (status !== 1n) {
-    throw new Error("Issued certificate did not resolve to ACTIVE");
-  }
+    const existingStatus = await contract.verifyCertificate(documentHash);
+    if (existingStatus !== 0n) {
+      throw conflict(
+        "CERTIFICATE_ALREADY_EXISTS",
+        "Certificate hash has already been issued",
+      );
+    }
 
-  addRecord(documentHash, {
-    documentHash,
-    status: "ACTIVE",
-    issuer: getIssuerAddress(),
-    issuedAt: Math.floor(Date.now() / 1000),
-    revokedAt: 0,
-    issueTxHash: receipt.transactionHash,
-    issueBlockNumber: receipt.blockNumber,
-    revokeTxHash: null,
-    revokeBlockNumber: null,
-    revokedBy: null,
+    try {
+      const receipt = await waitForReceipt(
+        writeContract.issueCertificate(documentHash),
+      );
+
+      const record = await contract.getCertificate(documentHash);
+      if (record.status !== 1n) {
+        throw new HttpError(
+          502,
+          "POST_WRITE_STATE_MISMATCH",
+          "Issued certificate did not resolve to ACTIVE",
+        );
+      }
+
+      const indexedRecord = {
+        documentHash,
+        status: "ACTIVE",
+        issuer: record.issuer,
+        issuedAt: Number(record.issuedAt),
+        revokedAt: Number(record.revokedAt),
+        issueTxHash: receipt.transactionHash,
+        issueBlockNumber: receipt.blockNumber,
+        revokeTxHash: null,
+        revokeBlockNumber: null,
+        revokedBy: null,
+      };
+      addRecord(documentHash, indexedRecord);
+
+      return {
+        ...receipt,
+        documentHash,
+        status: "ACTIVE",
+        issuer: record.issuer,
+        issuedAt: Number(record.issuedAt),
+      };
+    } catch (error) {
+      throw mapContractError(error);
+    }
   });
-
-  return {
-    ...receipt,
-    documentHash,
-    status: "ACTIVE",
-  };
 }
 
 export async function revokeCertificate(documentHash) {
   validateDocumentHash(documentHash);
-  const contract = getReadContract();
-  const writeContract = getWriteContract();
 
-  const record = await contract.getCertificate(documentHash);
-  const signerAddress = getIssuerAddress();
+  return serializeWrite(async () => {
+    const contract = getReadContract();
+    const writeContract = getWriteContract();
+    const record = await contract.getCertificate(documentHash);
+    const signerAddress = getIssuerAddress();
 
-  if (record.issuer.toLowerCase() !== signerAddress.toLowerCase()) {
-    throw new Error("Configured signer is not the original certificate issuer");
-  }
+    if (record.status === 0n) {
+      throw notFound(
+        "CERTIFICATE_NOT_FOUND",
+        "Certificate does not exist",
+      );
+    }
+    if (record.status === 2n) {
+      throw conflict(
+        "CERTIFICATE_ALREADY_REVOKED",
+        "Certificate is already revoked",
+      );
+    }
+    if (record.issuer.toLowerCase() !== signerAddress.toLowerCase()) {
+      throw forbidden(
+        "UNAUTHORIZED_REVOKER",
+        "Configured signer is not the original certificate issuer",
+      );
+    }
 
-  const receipt = await waitForReceipt(
-    writeContract.revokeCertificate(documentHash),
-  );
+    try {
+      const receipt = await waitForReceipt(
+        writeContract.revokeCertificate(documentHash),
+      );
 
-  const status = await contract.verifyCertificate(documentHash);
-  if (status !== 2n) {
-    throw new Error("Revoked certificate did not resolve to REVOKED");
-  }
+      const confirmedRecord = await contract.getCertificate(documentHash);
+      if (confirmedRecord.status !== 2n) {
+        throw new HttpError(
+          502,
+          "POST_WRITE_STATE_MISMATCH",
+          "Revoked certificate did not resolve to REVOKED",
+        );
+      }
 
-  updateRecordStatus(documentHash, {
-    status: "REVOKED",
-    revokedAt: Math.floor(Date.now() / 1000),
-    revokeTxHash: receipt.transactionHash,
-    revokeBlockNumber: receipt.blockNumber,
-    revokedBy: signerAddress,
+      updateRecordStatus(documentHash, {
+        status: "REVOKED",
+        revokedAt: Number(confirmedRecord.revokedAt),
+        revokeTxHash: receipt.transactionHash,
+        revokeBlockNumber: receipt.blockNumber,
+        revokedBy: signerAddress,
+      });
+
+      return {
+        ...receipt,
+        documentHash,
+        status: "REVOKED",
+        revokedAt: Number(confirmedRecord.revokedAt),
+        revokedBy: signerAddress,
+      };
+    } catch (error) {
+      throw mapContractError(error);
+    }
   });
-
-  return {
-    ...receipt,
-    documentHash,
-    status: "REVOKED",
-  };
 }
 
 export async function isAuthorizedIssuer(address) {

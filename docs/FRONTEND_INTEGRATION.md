@@ -93,7 +93,7 @@ keeping reads fast.
 
 ## 2. Frontend document hash generation
 
-### Decision: Use SHA-256 on raw file bytes, identical to the backend
+### Decision: Use SHA-256 on exact raw file bytes
 
 ### Rule
 
@@ -135,8 +135,10 @@ const file = fileInput.files[0];
 // Hash the file before sending to the backend
 const documentHash = await hashDocument(file);
 
-// Send to backend for issuance
-const response = await fetch("/api/write/issue", {
+// Send the hash to the authenticated institution application.
+// That trusted server calls the blockchain gateway; WRITE_API_KEY must
+// never be placed in browser code.
+const response = await fetch("/api/institution/certificate-requests/request-id/issue", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ documentHash }),
@@ -168,7 +170,7 @@ if (!isValidDocumentHash(documentHash)) {
 | Keccak-256 | Contract expects SHA-256 |
 | String content of the file | Different from binary content for binary files |
 
-### Agreement between frontend and backend
+### Agreement between application components
 
 Both sides must use the same hashing logic:
 1. Read the file as raw bytes (not text, not base64)
@@ -176,9 +178,11 @@ Both sides must use the same hashing logic:
 3. Represent as `0x` + 64 lowercase hex characters
 4. Pass that string as `documentHash` in API calls
 
-If the frontend generates the hash (for issuance), the backend re-hashes
-the document during verification and compares. Both must produce the same
-result.
+The current blockchain gateway validates a supplied hash but does not receive
+or re-hash the document. The authenticated institution backend must either
+hash the exact raw bytes itself or compare the browser-generated digest with
+its own digest before calling `/api/write/issue`. The gateway's
+`WRITE_API_KEY` is server-side only and must never be exposed to a browser.
 
 ---
 

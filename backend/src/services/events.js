@@ -1,80 +1,92 @@
+import { getBlockchainConfig } from "../config.js";
 import { getProvider, getReadContract } from "./blockchain.js";
+import {
+  getConfirmedHead,
+  normalizeBlockRange,
+} from "../utils/blocks.js";
 
-const START_BLOCK = BigInt(process.env.PRAMAAN_CHAIN_START_BLOCK || "11318772");
-const CONFIRMATIONS = Number(process.env.BLOCKCHAIN_CONFIRMATIONS || "2");
+const EVENT_NAMES = [
+  "CertificateIssued",
+  "CertificateRevoked",
+  "IssuerAuthorized",
+  "IssuerRemoved",
+];
 
-const processedEvents = new Map();
-
-function eventKey(txHash, logIndex) {
-  return `${txHash}:${logIndex}`;
+function serializeValue(value) {
+  return typeof value === "bigint" ? value.toString() : value;
 }
 
-function decodeEvent(log) {
-  const contract = getReadContract();
-  const iface = contract.interface;
+export function decodeEvent(log, contractInterface) {
+  const parsed = contractInterface.parseLog(log);
+  if (!parsed) return null;
 
-  try {
-    const parsed = iface.parseLog(log);
-    if (!parsed) return null;
+  const args = Object.fromEntries(
+    parsed.fragment.inputs.map((input, index) => [
+      input.name,
+      serializeValue(parsed.args[index]),
+    ]),
+  );
 
-    return {
-      eventName: parsed.name,
-      blockNumber: Number(log.blockNumber),
-      blockHash: log.blockHash,
-      transactionHash: log.transactionHash,
-      logIndex: Number(log.logIndex),
-      args: Object.fromEntries(
-        Object.entries(parsed.args).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v]),
-      ),
-    };
-  } catch {
-    return null;
-  }
+  return {
+    eventName: parsed.name,
+    blockNumber: Number(log.blockNumber),
+    blockHash: log.blockHash,
+    transactionHash: log.transactionHash,
+    logIndex: Number(log.index),
+    args,
+  };
 }
 
-export async function fetchEvents(fromBlock, toBlock) {
-  const contract = getReadContract();
-  const provider = getProvider();
+async function queryEvent(contract, eventName, from, to, chunkSize) {
+  const events = [];
 
-  const eventNames = [
-    "CertificateIssued",
-    "CertificateRevoked",
-    "IssuerAuthorized",
-    "IssuerRemoved",
-  ];
-
-  const from = fromBlock ?? START_BLOCK;
-  const to = toBlock ?? (await provider.getBlockNumber()) - BigInt(CONFIRMATIONS);
-
-  if (from > to) return [];
-
-  const allEvents = [];
-
-  for (const eventName of eventNames) {
-    const filter = contract.filters[eventName]();
-    const logs = await contract.queryFilter(filter, from, to);
+  for (let chunkFrom = from; chunkFrom <= to; chunkFrom += chunkSize) {
+    const chunkTo = Math.min(to, chunkFrom + chunkSize - 1);
+    const logs = await contract.queryFilter(
+      contract.filters[eventName](),
+      chunkFrom,
+      chunkTo,
+    );
 
     for (const log of logs) {
-      const key = eventKey(log.transactionHash, log.logIndex);
-      if (processedEvents.has(key)) continue;
-
-      const decoded = decodeEvent(log);
-      if (decoded) {
-        processedEvents.set(key, decoded);
-        allEvents.push(decoded);
-      }
+      const decoded = decodeEvent(log, contract.interface);
+      if (decoded) events.push(decoded);
     }
   }
 
-  allEvents.sort((a, b) => a.blockNumber - b.blockNumber || a.logIndex - b.logIndex);
-
-  return allEvents;
+  return events;
 }
 
-export function getProcessedCount() {
-  return processedEvents.size;
-}
+export async function fetchEvents(requestedFrom, requestedTo) {
+  const contract = getReadContract();
+  const provider = getProvider();
+  const config = getBlockchainConfig();
+  const latestBlock = await provider.getBlockNumber();
+  const confirmedHead = getConfirmedHead(latestBlock, config.confirmations);
+  const range = normalizeBlockRange({
+    requestedFrom,
+    requestedTo,
+    startBlock: config.startBlock,
+    confirmedHead,
+    maxRange: config.eventMaxRange,
+  });
 
-export function clearEvents() {
-  processedEvents.clear();
+  if (range.empty) return [];
+
+  const eventGroups = await Promise.all(
+    EVENT_NAMES.map((eventName) => queryEvent(
+      contract,
+      eventName,
+      range.from,
+      range.to,
+      config.eventChunkSize,
+    )),
+  );
+
+  return eventGroups
+    .flat()
+    .sort(
+      (a, b) => a.blockNumber - b.blockNumber
+        || a.logIndex - b.logIndex,
+    );
 }

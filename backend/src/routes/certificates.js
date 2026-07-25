@@ -1,71 +1,95 @@
 import { Router } from "express";
+import { getAddress } from "ethers";
 import {
   queryCertificates,
-  getRecordByHash,
   isIndexReady,
   getIndexSize,
   getSummary,
+  getIndexState,
+  syncIndex,
 } from "../services/certificateIndex.js";
+import { badRequest } from "../utils/httpError.js";
+import { serviceUnavailable } from "../utils/httpError.js";
+import { redactSecrets } from "../utils/redact.js";
 
 const router = Router();
 
-router.get("/certificates", (req, res, next) => {
+async function refreshIndex() {
   try {
+    await syncIndex();
+  } catch (error) {
     if (!isIndexReady()) {
-      return res.status(503).json({ error: "Certificate index not ready" });
+      throw serviceUnavailable(
+        "CERTIFICATE_INDEX_NOT_READY",
+        "Certificate index is not ready",
+      );
     }
+    console.warn(
+      `Serving stale certificate index: ${redactSecrets(error.message)}`,
+    );
+  }
+}
 
-    const status = req.query.status
-      ? req.query.status.toUpperCase()
-      : undefined;
-
-    if (status && !["ACTIVE", "REVOKED", "NOT_FOUND"].includes(status)) {
-      return res.status(400).json({
-        error: "status must be ACTIVE, REVOKED, or NOT_FOUND",
+router.get("/certificates/summary", async (_req, res, next) => {
+  try {
+    await refreshIndex();
+    if (!isIndexReady()) {
+      return res.status(503).json({
+        error: {
+          code: "CERTIFICATE_INDEX_NOT_READY",
+          message: "Certificate index is not ready",
+        },
       });
     }
 
-    const issuer = req.query.issuer || undefined;
+    return res.json({
+      ...getSummary(),
+      indexSize: getIndexSize(),
+      index: getIndexState(),
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
 
+router.get("/certificates", async (req, res, next) => {
+  try {
+    await refreshIndex();
+    if (!isIndexReady()) {
+      return res.status(503).json({
+        error: {
+          code: "CERTIFICATE_INDEX_NOT_READY",
+          message: "Certificate index is not ready",
+        },
+      });
+    }
+
+    const status = req.query.status?.toUpperCase();
+    if (status && !["ACTIVE", "REVOKED"].includes(status)) {
+      throw badRequest(
+        "INVALID_CERTIFICATE_STATUS",
+        "status must be ACTIVE or REVOKED",
+      );
+    }
+
+    let issuer;
+    if (req.query.issuer) {
+      try {
+        issuer = getAddress(req.query.issuer);
+      } catch {
+        throw badRequest(
+          "INVALID_ISSUER_ADDRESS",
+          "issuer must be a valid Ethereum address",
+        );
+      }
+    }
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
 
     const result = queryCertificates({ status, issuer, page, limit });
-    res.json(result);
+    return res.json({ ...result, index: getIndexState() });
   } catch (err) {
-    next(err);
-  }
-});
-
-router.get("/certificates/summary", (req, res, next) => {
-  try {
-    if (!isIndexReady()) {
-      return res.status(503).json({ error: "Certificate index not ready" });
-    }
-
-    res.json({
-      ...getSummary(),
-      indexSize: getIndexSize(),
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.get("/certificates/:documentHash", (req, res, next) => {
-  try {
-    if (!isIndexReady()) {
-      return res.status(503).json({ error: "Certificate index not ready" });
-    }
-
-    const record = getRecordByHash(req.params.documentHash);
-    if (!record) {
-      return res.status(404).json({ error: "Certificate not found in index" });
-    }
-
-    res.json(record);
-  } catch (err) {
-    next(err);
+    return next(err);
   }
 });
 

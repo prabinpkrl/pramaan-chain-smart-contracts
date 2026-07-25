@@ -1,7 +1,18 @@
-import { Contract, JsonRpcProvider, Wallet, getAddress } from "ethers";
+import {
+  Contract,
+  JsonRpcProvider,
+  NonceManager,
+  Wallet,
+  getAddress,
+} from "ethers";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getBlockchainConfig } from "../config.js";
+import {
+  forbidden,
+  serviceUnavailable,
+} from "../utils/httpError.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,40 +22,35 @@ let provider = null;
 let readContract = null;
 let writeContract = null;
 let issuerAddress = null;
+let issuerAuthorized = false;
 
-function loadAbi() {
-  const abiPath = path.join(__dirname, "abi.json");
+export function loadAbi() {
+  const abiPath = path.join(__dirname, "..", "abi.json");
   return JSON.parse(fs.readFileSync(abiPath, "utf8"));
 }
 
 export async function initBlockchain() {
-  const expectedChainId = BigInt(process.env.BLOCKCHAIN_CHAIN_ID || "11155111");
-  const contractAddress = getAddress(process.env.PRAMAAN_CHAIN_ADDRESS);
-  const rpcUrl = process.env.SEPOLIA_RPC_URL;
-
-  if (!rpcUrl) {
-    throw new Error("SEPOLIA_RPC_URL is required");
-  }
+  const config = getBlockchainConfig();
 
   const abi = loadAbi();
 
-  provider = new JsonRpcProvider(rpcUrl);
+  provider = new JsonRpcProvider(config.rpcUrl);
 
   const network = await provider.getNetwork();
-  if (network.chainId !== expectedChainId) {
+  if (network.chainId !== config.chainId) {
     throw new Error(
-      `Chain ID mismatch: expected ${expectedChainId}, got ${network.chainId}`,
+      `Chain ID mismatch: expected ${config.chainId}, got ${network.chainId}`,
     );
   }
 
-  const code = await provider.getCode(contractAddress);
+  const code = await provider.getCode(config.contractAddress);
   if (code === "0x") {
     throw new Error(
-      `No bytecode at ${contractAddress} — contract not deployed`,
+      `No bytecode at ${config.contractAddress} — contract not deployed`,
     );
   }
 
-  readContract = new Contract(contractAddress, abi, provider);
+  readContract = new Contract(config.contractAddress, abi, provider);
 
   const requiredFns = [
     "verifyCertificate",
@@ -61,14 +67,34 @@ export async function initBlockchain() {
 
   const privateKey = process.env.ISSUER_PRIVATE_KEY;
   if (privateKey) {
-    const signer = new Wallet(privateKey, provider);
-    issuerAddress = await signer.getAddress();
-    writeContract = readContract.connect(signer);
+    const wallet = new Wallet(privateKey, provider);
+    issuerAddress = await wallet.getAddress();
 
-    const authorized = await readContract.isAuthorizedIssuer(issuerAddress);
-    if (!authorized) {
+    const expectedIssuer = process.env.ISSUER_ADDRESS;
+    if (!expectedIssuer) {
       throw new Error(
-        `Configured issuer ${issuerAddress} is not authorized on-chain`,
+        "ISSUER_ADDRESS is required when ISSUER_PRIVATE_KEY is configured",
+      );
+    }
+
+    let normalizedExpectedIssuer;
+    try {
+      normalizedExpectedIssuer = getAddress(expectedIssuer);
+    } catch {
+      throw new Error("ISSUER_ADDRESS must be a valid Ethereum address");
+    }
+
+    if (issuerAddress !== normalizedExpectedIssuer) {
+      throw new Error(
+        "Configured private key does not match the expected ISSUER_ADDRESS",
+      );
+    }
+
+    writeContract = readContract.connect(new NonceManager(wallet));
+    issuerAuthorized = await readContract.isAuthorizedIssuer(issuerAddress);
+    if (!issuerAuthorized) {
+      console.warn(
+        `Issuer ${issuerAddress} is not currently authorized; issuance is disabled`,
       );
     }
 
@@ -79,6 +105,9 @@ export async function initBlockchain() {
       );
     }
   } else {
+    issuerAddress = null;
+    issuerAuthorized = false;
+    writeContract = null;
     console.warn(
       "No ISSUER_PRIVATE_KEY configured — write operations disabled",
     );
@@ -89,7 +118,8 @@ export async function initBlockchain() {
     writeContract,
     provider,
     issuerAddress,
-    contractAddress,
+    issuerAuthorized,
+    contractAddress: config.contractAddress,
     chainId: network.chainId,
   };
 }
@@ -100,7 +130,12 @@ export function getReadContract() {
 }
 
 export function getWriteContract() {
-  if (!writeContract) throw new Error("Write service not initialized (no ISSUER_PRIVATE_KEY)");
+  if (!writeContract) {
+    throw serviceUnavailable(
+      "WRITE_SERVICE_DISABLED",
+      "Write service is not configured",
+    );
+  }
   return writeContract;
 }
 
@@ -111,6 +146,27 @@ export function getProvider() {
 
 export function getIssuerAddress() {
   return issuerAddress;
+}
+
+export async function requireAuthorizedIssuer() {
+  if (!issuerAddress || !readContract) {
+    throw serviceUnavailable(
+      "WRITE_SERVICE_DISABLED",
+      "Write service is not configured",
+    );
+  }
+
+  issuerAuthorized = await readContract.isAuthorizedIssuer(issuerAddress);
+  if (!issuerAuthorized) {
+    throw forbidden(
+      "ISSUER_NOT_AUTHORIZED",
+      "Configured issuer is not currently authorized",
+    );
+  }
+}
+
+export function isIssuerAuthorized() {
+  return issuerAuthorized;
 }
 
 export function statusToName(value) {
