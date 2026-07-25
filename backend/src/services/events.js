@@ -4,6 +4,7 @@ import {
   getConfirmedHead,
   normalizeBlockRange,
 } from "../utils/blocks.js";
+import { HttpError, serviceUnavailable } from "../utils/httpError.js";
 
 const EVENT_NAMES = [
   "CertificateIssued",
@@ -37,16 +38,28 @@ export function decodeEvent(log, contractInterface) {
   };
 }
 
-async function queryEvent(contract, eventName, from, to, chunkSize) {
+async function queryEvents(
+  provider,
+  contract,
+  contractAddress,
+  eventNames,
+  from,
+  to,
+  chunkSize,
+) {
   const events = [];
+  const eventTopics = eventNames.map(
+    (eventName) => contract.interface.getEvent(eventName).topicHash,
+  );
 
   for (let chunkFrom = from; chunkFrom <= to; chunkFrom += chunkSize) {
     const chunkTo = Math.min(to, chunkFrom + chunkSize - 1);
-    const logs = await contract.queryFilter(
-      contract.filters[eventName](),
-      chunkFrom,
-      chunkTo,
-    );
+    const logs = await provider.getLogs({
+      address: contractAddress,
+      topics: [eventTopics],
+      fromBlock: chunkFrom,
+      toBlock: chunkTo,
+    });
 
     for (const log of logs) {
       const decoded = decodeEvent(log, contract.interface);
@@ -57,36 +70,46 @@ async function queryEvent(contract, eventName, from, to, chunkSize) {
   return events;
 }
 
-export async function fetchEvents(requestedFrom, requestedTo) {
-  const contract = getReadContract();
-  const provider = getProvider();
-  const config = getBlockchainConfig();
-  const latestBlock = await provider.getBlockNumber();
-  const confirmedHead = getConfirmedHead(latestBlock, config.confirmations);
-  const range = normalizeBlockRange({
-    requestedFrom,
-    requestedTo,
-    startBlock: config.startBlock,
-    confirmedHead,
-    maxRange: config.eventMaxRange,
-  });
+export async function fetchEvents(
+  requestedFrom,
+  requestedTo,
+  eventNames = EVENT_NAMES,
+) {
+  try {
+    const contract = getReadContract();
+    const provider = getProvider();
+    const config = getBlockchainConfig();
+    const latestBlock = await provider.getBlockNumber();
+    const confirmedHead = getConfirmedHead(latestBlock, config.confirmations);
+    const range = normalizeBlockRange({
+      requestedFrom,
+      requestedTo,
+      startBlock: config.startBlock,
+      confirmedHead,
+      maxRange: config.eventMaxRange,
+    });
 
-  if (range.empty) return [];
+    if (range.empty) return [];
 
-  const eventGroups = await Promise.all(
-    EVENT_NAMES.map((eventName) => queryEvent(
+    const events = await queryEvents(
+      provider,
       contract,
-      eventName,
+      config.contractAddress,
+      eventNames,
       range.from,
       range.to,
       config.eventChunkSize,
-    )),
-  );
+    );
 
-  return eventGroups
-    .flat()
-    .sort(
+    return events.sort(
       (a, b) => a.blockNumber - b.blockNumber
         || a.logIndex - b.logIndex,
     );
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw serviceUnavailable(
+      "EVENT_HISTORY_UNAVAILABLE",
+      "Blockchain event history is temporarily unavailable",
+    );
+  }
 }

@@ -1,5 +1,30 @@
 # PramaanChain Frontend Integration Decisions
 
+## Current implementation boundary
+
+This document defines frontend integration decisions; it does not claim that
+all described frontend or citizen authentication features are implemented.
+
+The current backend gateway supports public certificate reads, certificate and
+event lists, and protected issuer issue/revoke operations. It validates the
+server-side issuer wallet against its configured public address and on-chain
+authorization.
+
+The current backend and frontend do **not** yet implement citizen wallet
+connection, a backend-generated login nonce, citizen signature verification,
+citizen sessions/JWTs, private citizen ownership records, or wallet-based
+dashboard authorization.
+
+The future citizen login nonce must not be confused with the Ethereum
+transaction nonce managed for the issuer signer. The former proves control of
+a citizen wallet during login; the latter orders blockchain transactions.
+The HTTP `Idempotency-Key` separately prevents duplicate issue/revoke
+submissions.
+
+Frontend code must never receive `WRITE_API_KEY`, `ISSUER_PRIVATE_KEY`, or the
+administrator private key. A trusted authenticated application backend must
+call the protected issuer-write endpoints.
+
 ## 1. Certificates page data source
 
 ### Decision: Use `GET /api/certificates` (new endpoint), not `GET /api/events`

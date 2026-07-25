@@ -33,6 +33,26 @@ application's own authorization and retention policies.
   exposed through this API. They remain a separate blockchain-lead
   operation.
 
+### 1.3 Nonce and replay concepts
+
+The current gateway has two blockchain-write protections, but it does not yet
+implement citizen wallet login:
+
+| Concept | Implemented? | Purpose |
+| --- | --- | --- |
+| Ethereum transaction nonce | Yes | ethers `NonceManager` assigns the issuer wallet's transaction sequence and reloads it after a definite pre-broadcast failure |
+| HTTP `Idempotency-Key` | Yes | Prevents one logical issue/revoke request from producing duplicate blockchain transactions |
+| Citizen login nonce and wallet signature | No | A future authentication backend must issue a short-lived random challenge and verify the citizen's signed response |
+
+An Ethereum transaction nonce is blockchain transaction ordering, not a login
+challenge. An `Idempotency-Key` is an application request identifier and does
+not prove wallet ownership.
+
+At startup, the gateway derives the issuer public address from
+`ISSUER_PRIVATE_KEY`, matches it against `ISSUER_ADDRESS`, and reads its
+current on-chain issuer authorization. It does not authenticate citizen
+wallets or create user sessions.
+
 ## 2. Requirements
 
 - Node.js `22.13.0` or newer
@@ -74,16 +94,27 @@ All configuration is loaded from environment variables via `dotenv`. Copy
 | `BLOCKCHAIN_CHAIN_ID` | No | `11155111` | Expected chain ID — startup rejects mismatches |
 | `PRAMAAN_CHAIN_ADDRESS` | Yes | — | Deployed `PramaanChain` contract address |
 | `PRAMAAN_CHAIN_START_BLOCK` | No | `11318772` | Block number to begin event indexing |
-| `SEPOLIA_RPC_URL` | Yes | — | HTTP RPC endpoint for Sepolia |
+| `SEPOLIA_RPC_URL` | Yes | — | HTTP Sepolia RPC; event features require historical `eth_getLogs` support |
 | `ISSUER_ADDRESS` | With issuer key | — | Expected public address derived from the configured issuer key |
 | `ISSUER_PRIVATE_KEY` | For writes | — | Test-only issuer wallet private key |
 | `WRITE_API_KEY` | For writes | — | Long random server-side key required in the `x-api-key` header |
 | `CORS_ALLOWED_ORIGINS` | No | empty | Comma-separated browser origins; server-to-server calls do not send an origin |
 | `BLOCKCHAIN_CONFIRMATIONS` | No | `2` | Block confirmations before treating a write as final |
-| `EVENT_QUERY_CHUNK_SIZE` | No | `2000` | Maximum block count in one RPC log query |
+| `RPC_REQUEST_TIMEOUT_MS` | No | `30000` | Maximum duration of an individual RPC request |
+| `TRANSACTION_WAIT_TIMEOUT_MS` | No | `180000` | Maximum receipt-confirmation wait before returning an ambiguous-write error |
+| `EVENT_QUERY_CHUNK_SIZE` | No | `10000` | Maximum block count in one RPC log query |
 | `EVENT_MAX_RANGE` | No | `100000` | Maximum block range accepted by event endpoints |
 | `INDEX_POLL_INTERVAL_MS` | No | `15000` | Certificate-index synchronization interval |
+| `INDEX_MAX_RETRY_INTERVAL_MS` | No | `300000` | Maximum event-index retry backoff |
+| `IDEMPOTENCY_STORE_PATH` | No | `.data/idempotency.json` | Gitignored single-process operation journal |
+| `TRUST_PROXY` | No | `false` | Express proxy trust: `false` or the exact trusted proxy-hop count (`1`–`10`) |
 | `PORT` | No | `3000` | HTTP server listen port |
+
+`TRUST_PROXY` is not required for local or direct development and should
+remain `false`. Set an exact hop count only when a known reverse proxy such as
+Nginx, Cloudflare, or a platform load balancer sits in front of Express. This
+allows per-IP rate limiting to use the forwarded client address. A frontend
+calling the API does not by itself require proxy trust.
 
 ### 4.2 Example .env
 
@@ -98,9 +129,14 @@ ISSUER_PRIVATE_KEY=0xYOUR_TEST_ONLY_KEY
 WRITE_API_KEY=replace-with-a-long-random-value
 CORS_ALLOWED_ORIGINS=http://localhost:5173
 BLOCKCHAIN_CONFIRMATIONS=2
-EVENT_QUERY_CHUNK_SIZE=2000
+RPC_REQUEST_TIMEOUT_MS=30000
+TRANSACTION_WAIT_TIMEOUT_MS=180000
+EVENT_QUERY_CHUNK_SIZE=10000
 EVENT_MAX_RANGE=100000
 INDEX_POLL_INTERVAL_MS=15000
+INDEX_MAX_RETRY_INTERVAL_MS=300000
+IDEMPOTENCY_STORE_PATH=.data/idempotency.json
+TRUST_PROXY=false
 PORT=3000
 ```
 
@@ -144,6 +180,13 @@ Write endpoints also fail closed with `503 Service Unavailable` when
 its earlier certificates, but issuance is disabled until the address is
 authorized again.
 
+After the mandatory connection checks pass, the HTTP server starts and builds
+the historical certificate index in the background. Health and direct
+verification remain usable while indexing. If the RPC cannot serve historical
+logs, index-backed list/summary endpoints return `503`, health reports the
+degraded index state, and retries use exponential backoff instead of a fixed
+error loop.
+
 ## 6. Project structure
 
 ```text
@@ -160,7 +203,7 @@ backend/
     │   ├── certificate.js       Issue, verify, revoke, get
     │   ├── certificateIndex.js  Continuously synchronized certificate index
     │   ├── events.js            Stable confirmed event queries
-    │   └── idempotency.js       Process-local write idempotency
+    │   └── idempotency.js       Persistent single-process write idempotency
     ├── routes/
     │   ├── read.js              Public read endpoints
     │   ├── write.js             Issuer write endpoints
@@ -182,7 +225,7 @@ backend/
 | `services/certificate.js` | Serializes writes, performs preflight validation, waits for confirmed receipts, reads authoritative post-write records, and maps contract errors safely. |
 | `services/certificateIndex.js` | Builds and polls a confirmed in-memory certificate index in bounded RPC chunks, with checkpoint-based reorganization detection. |
 | `services/events.js` | Returns stable, named, confirmed domain events for bounded block ranges. Repeating a GET returns the same events. |
-| `services/idempotency.js` | Requires an `Idempotency-Key` for writes and deduplicates matching requests during the process lifetime. |
+| `services/idempotency.js` | Requires an `Idempotency-Key`, persists completed and ambiguous operations atomically, and prevents restart-time duplicate submission in one process. |
 | `routes/read.js` | Public read-only Express routes mounted at `/api`. |
 | `routes/write.js` | Issuer write routes. Requires `x-api-key`, `Idempotency-Key`, and a configured issuer signer. |
 | `routes/events.js` | Event query Express route mounted at `/api`. |
@@ -548,7 +591,8 @@ All errors return a stable code and safe message:
 | `404 Not Found` | Missing resource | Revocation target does not exist |
 | `409 Conflict` | State conflict | Duplicate issuance, repeated revocation, reused idempotency key |
 | `502 Bad Gateway` | Blockchain transaction failed | On-chain revert, receipt null or failed |
-| `503 Service Unavailable` | Service not ready | Index, write authentication, or signer not configured |
+| `503 Service Unavailable` | Service not ready | Event history, index, write authentication, or signer not configured |
+| `504 Gateway Timeout` | Transaction state is ambiguous | Confirmation timeout after a transaction hash was obtained |
 | `500 Internal Server Error` | Unexpected failure | Unhandled exceptions |
 
 Unexpected provider and implementation errors return `INTERNAL_ERROR`
@@ -622,7 +666,7 @@ Write operations follow this flow:
 3. Perform status, authorization, and original-issuer preflight reads.
 4. Serialize operations for the signer and submit the transaction.
 5. Wait for `BLOCKCHAIN_CONFIRMATIONS` blocks (default: 2) for the
-   receipt.
+   receipt, bounded by `TRANSACTION_WAIT_TIMEOUT_MS`.
 6. Verify `receipt.status === 1` (success).
 7. Perform a read-only post-check: the record must return the
    expected status (`ACTIVE` after issuance, `REVOKED` after revocation).
@@ -636,16 +680,27 @@ post-verification are both required.
 ### 11.1 Nonce management
 
 The signer uses ethers v6 `NonceManager`, and writes are serialized inside
-the process. Horizontal scaling still requires one shared durable queue or
-a single signing worker.
+the process. A definite pre-broadcast submission failure resets the managed
+nonce from the network before the next write. A timeout after obtaining a
+transaction hash does not reset or automatically reuse that nonce because the
+transaction may still be pending. Horizontal scaling still requires one shared
+durable queue or a single signing worker.
 
 ### 11.2 Idempotency and retry policy
 
 Every write requires `Idempotency-Key`. Matching retries return the saved
-result without another transaction while the process remains alive. The
-same key cannot be reused with a different body. Failed or ambiguous
-transactions are never automatically retried. Durable idempotency and
-cross-process recovery require the planned database and queue layer.
+result without another transaction. Completed and ambiguous operations are
+stored atomically in the gitignored `IDEMPOTENCY_STORE_PATH`, so they survive
+a restart of the same service instance. An operation found as `pending` after
+a crash is reported as unresolved and must be reconciled against its
+transaction hash, signer nonce, events, and contract state. The same key cannot
+be reused with a different body. Failed or ambiguous transactions are never
+automatically retried. Shared multi-process idempotency still requires the
+planned database and queue layer.
+
+For example, if an institution backend times out after requesting issuance, it
+must retry with the same key and document hash. It must not use a new key to
+bypass an unresolved transaction.
 
 ## 12. Event indexing
 
@@ -660,10 +715,13 @@ cross-process recovery require the planned database and queue layer.
 
 ### 12.2 Synchronization
 
-The certificate index is rebuilt from the deployment block, queried in
-bounded chunks, and synchronized at `INDEX_POLL_INTERVAL_MS`. Confirmed
-writes through this process update the index immediately. Event GET
-requests are stateless and stable.
+The certificate index is rebuilt in the background from the deployment block,
+queried in bounded chunks, and synchronized at `INDEX_POLL_INTERVAL_MS`.
+All requested domain event signatures are combined into each RPC log query to
+avoid redundant historical scans. Failed synchronizations retry with
+exponential backoff capped by `INDEX_MAX_RETRY_INTERVAL_MS`. Confirmed writes
+through this process update the index immediately. Event GET requests are
+stateless and stable.
 
 ### 12.3 Chain reorganization
 
@@ -706,7 +764,8 @@ implemented:
 - persistent database-backed event and certificate storage;
 - citizen and institution-user authentication, sessions, roles, and
   institution-scoped authorization;
-- durable idempotency and a shared transaction queue for multiple processes;
+- database-backed shared idempotency and a transaction queue for multiple
+  processes (the prototype journal supports one process only);
 - frontend, QR code, or citizen workflow integration;
 - KMS, HSM, Vault, or production key management;
 - monitoring, alerting, or structured logging;
@@ -715,6 +774,11 @@ implemented:
 - zero-knowledge proof verification.
 
 These require separate design and explicit authorization.
+
+There is currently no citizen wallet-connect authentication endpoint,
+login-challenge nonce, signature verification, session/JWT creation, or
+frontend wallet integration. Those features are separate from the implemented
+issuer-wallet validation used for blockchain writes.
 
 ## 15. Running locally
 

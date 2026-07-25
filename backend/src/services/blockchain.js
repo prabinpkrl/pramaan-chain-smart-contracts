@@ -1,5 +1,6 @@
 import {
   Contract,
+  FetchRequest,
   JsonRpcProvider,
   NonceManager,
   Wallet,
@@ -21,6 +22,7 @@ const STATUS_NAMES = ["NOT_FOUND", "ACTIVE", "REVOKED"];
 let provider = null;
 let readContract = null;
 let writeContract = null;
+let writeSigner = null;
 let issuerAddress = null;
 let issuerAuthorized = false;
 
@@ -32,9 +34,18 @@ export function loadAbi() {
 export async function initBlockchain() {
   const config = getBlockchainConfig();
 
+  provider = null;
+  readContract = null;
+  writeContract = null;
+  writeSigner = null;
+  issuerAddress = null;
+  issuerAuthorized = false;
+
   const abi = loadAbi();
 
-  provider = new JsonRpcProvider(config.rpcUrl);
+  const rpcRequest = new FetchRequest(config.rpcUrl);
+  rpcRequest.timeout = config.rpcRequestTimeoutMs;
+  provider = new JsonRpcProvider(rpcRequest);
 
   const network = await provider.getNetwork();
   if (network.chainId !== config.chainId) {
@@ -90,7 +101,8 @@ export async function initBlockchain() {
       );
     }
 
-    writeContract = readContract.connect(new NonceManager(wallet));
+    writeSigner = new NonceManager(wallet);
+    writeContract = readContract.connect(writeSigner);
     issuerAuthorized = await readContract.isAuthorizedIssuer(issuerAddress);
     if (!issuerAuthorized) {
       console.warn(
@@ -146,6 +158,10 @@ export function getProvider() {
 
 export function getIssuerAddress() {
   return issuerAddress;
+}
+
+export function resetWriteNonce() {
+  writeSigner?.reset();
 }
 
 export async function requireAuthorizedIssuer() {

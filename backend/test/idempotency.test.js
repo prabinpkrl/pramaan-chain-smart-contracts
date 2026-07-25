@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   clearIdempotencyCache,
+  reloadIdempotencyStore,
   runIdempotent,
 } from "../src/services/idempotency.js";
 
@@ -9,7 +10,11 @@ test.beforeEach(() => {
   clearIdempotencyCache();
 });
 
-test("idempotent operations execute once and replay their result", async () => {
+test.afterEach(() => {
+  clearIdempotencyCache();
+});
+
+test("completed operations survive a process-style cache reload", async () => {
   let calls = 0;
   const request = {
     key: "request-1",
@@ -22,6 +27,7 @@ test("idempotent operations execute once and replay their result", async () => {
   };
 
   const first = await runIdempotent(request);
+  reloadIdempotencyStore();
   const second = await runIdempotent(request);
 
   assert.equal(calls, 1);
@@ -64,6 +70,30 @@ test("ambiguous server failures remain associated with their key", async () => {
   };
 
   await assert.rejects(runIdempotent(request));
+  reloadIdempotencyStore();
   await assert.rejects(runIdempotent(request));
   assert.equal(calls, 1);
+});
+
+test("persisted unexpected failures do not expose their original message", async () => {
+  const request = {
+    key: "request-redacted",
+    operation: "issue",
+    fingerprint: "hash-1",
+    execute: async () => {
+      throw new Error("provider secret must not persist");
+    },
+  };
+
+  await assert.rejects(runIdempotent(request));
+  reloadIdempotencyStore();
+
+  await assert.rejects(
+    runIdempotent(request),
+    (error) => (
+      error.status === 500
+      && error.code === "BLOCKCHAIN_OPERATION_FAILED"
+      && error.message === "Blockchain operation failed"
+    ),
+  );
 });

@@ -12,6 +12,9 @@ const EVENT_TYPES = {
   IssuerAuthorized: "authorization",
   IssuerRemoved: "removal",
 };
+const EVENT_NAMES_BY_TYPE = Object.fromEntries(
+  Object.entries(EVENT_TYPES).map(([eventName, type]) => [type, eventName]),
+);
 
 router.get("/events/transformed", async (req, res, next) => {
   try {
@@ -29,7 +32,11 @@ router.get("/events/transformed", async (req, res, next) => {
 
     const provider = getProvider();
     const blockTimestamps = new Map();
-    const events = await fetchEvents(from, to);
+    const events = await fetchEvents(
+      from,
+      to,
+      typeFilter ? [EVENT_NAMES_BY_TYPE[typeFilter]] : undefined,
+    );
     const transformed = [];
 
     for (const event of events) {

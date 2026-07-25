@@ -3,6 +3,7 @@ import {
   getWriteContract,
   getIssuerAddress,
   requireAuthorizedIssuer,
+  resetWriteNonce,
   statusToName,
 } from "./blockchain.js";
 import {
@@ -67,10 +68,48 @@ export function mapContractError(error) {
   );
 }
 
-async function waitForReceipt(transactionPromise) {
-  const { confirmations } = getBlockchainConfig();
-  const transaction = await transactionPromise;
-  const receipt = await transaction.wait(confirmations);
+export async function submitAndWaitForReceipt(
+  sendTransaction,
+  {
+    confirmations,
+    timeoutMs,
+    resetNonce = resetWriteNonce,
+  },
+) {
+  let transaction;
+  try {
+    transaction = await sendTransaction();
+  } catch (error) {
+    resetNonce();
+    throw error;
+  }
+
+  let receipt;
+  try {
+    receipt = await transaction.wait(confirmations, timeoutMs);
+  } catch (error) {
+    if (
+      error?.code === "TRANSACTION_REPLACED"
+      && error.cancelled === false
+      && error.receipt?.status === 1
+    ) {
+      receipt = error.receipt;
+    } else if (error?.receipt) {
+      throw new HttpError(
+        502,
+        "BLOCKCHAIN_TRANSACTION_FAILED",
+        "Blockchain transaction was mined but did not succeed",
+        { transactionHash: transaction.hash },
+      );
+    } else {
+      throw new HttpError(
+        504,
+        "BLOCKCHAIN_TRANSACTION_STATUS_UNKNOWN",
+        "Transaction confirmation timed out or became unavailable; inspect its hash before retrying",
+        { transactionHash: transaction.hash },
+      );
+    }
+  }
 
   if (receipt === null || receipt.status !== 1) {
     throw new HttpError(
@@ -85,6 +124,17 @@ async function waitForReceipt(transactionPromise) {
     transactionHash: receipt.hash,
     blockNumber: Number(receipt.blockNumber),
   };
+}
+
+async function waitForReceipt(sendTransaction) {
+  const {
+    confirmations,
+    transactionWaitTimeoutMs,
+  } = getBlockchainConfig();
+  return submitAndWaitForReceipt(sendTransaction, {
+    confirmations,
+    timeoutMs: transactionWaitTimeoutMs,
+  });
 }
 
 export async function verifyCertificate(documentHash) {
@@ -139,15 +189,26 @@ export async function issueCertificate(documentHash) {
 
     try {
       const receipt = await waitForReceipt(
-        writeContract.issueCertificate(documentHash),
+        () => writeContract.issueCertificate(documentHash),
       );
 
-      const record = await contract.getCertificate(documentHash);
+      let record;
+      try {
+        record = await contract.getCertificate(documentHash);
+      } catch {
+        throw new HttpError(
+          502,
+          "POST_WRITE_STATE_CHECK_FAILED",
+          "Issuance confirmed, but the resulting contract state could not be read",
+          { transactionHash: receipt.transactionHash },
+        );
+      }
       if (record.status !== 1n) {
         throw new HttpError(
           502,
           "POST_WRITE_STATE_MISMATCH",
           "Issued certificate did not resolve to ACTIVE",
+          { transactionHash: receipt.transactionHash },
         );
       }
 
@@ -208,15 +269,26 @@ export async function revokeCertificate(documentHash) {
 
     try {
       const receipt = await waitForReceipt(
-        writeContract.revokeCertificate(documentHash),
+        () => writeContract.revokeCertificate(documentHash),
       );
 
-      const confirmedRecord = await contract.getCertificate(documentHash);
+      let confirmedRecord;
+      try {
+        confirmedRecord = await contract.getCertificate(documentHash);
+      } catch {
+        throw new HttpError(
+          502,
+          "POST_WRITE_STATE_CHECK_FAILED",
+          "Revocation confirmed, but the resulting contract state could not be read",
+          { transactionHash: receipt.transactionHash },
+        );
+      }
       if (confirmedRecord.status !== 2n) {
         throw new HttpError(
           502,
           "POST_WRITE_STATE_MISMATCH",
           "Revoked certificate did not resolve to REVOKED",
+          { transactionHash: receipt.transactionHash },
         );
       }
 

@@ -185,18 +185,33 @@ and event queries, and protected issuer write endpoints.
 cd backend
 npm ci
 cp .env.example .env
-# Fill the gitignored file with test-only configuration.
+# Fill the gitignored file with the public contract/RPC configuration.
+# Add issuer credentials only when write operations are intentionally enabled.
 npm test
 npm start
 ```
 
+The backend can run safely in read-only mode without an issuer private key or
+write API key. Its RPC must support historical `eth_getLogs` queries from
+deployment block `11318772`; otherwise direct verification remains available
+but certificate lists and event history report a degraded index.
+
 Writes fail closed unless the expected issuer address, test-only issuer key,
 and a server-side `WRITE_API_KEY` are configured. Every write also requires a
-unique `Idempotency-Key`. The API key is a server-to-server prototype control
-and must never be embedded in frontend code. Current API configuration,
-security rules, requests, responses, and limitations are documented in
+unique `Idempotency-Key`. The single-process prototype persists these operation
+records in a gitignored local journal so a restart cannot silently resubmit an
+ambiguous write. The API key is a server-to-server prototype control and must
+never be embedded in frontend code. Current API configuration, security rules,
+requests, responses, and limitations are documented in
 [`docs/BACKEND_API.md`](docs/BACKEND_API.md) and
 [`docs/BACKEND_SAMPLES.md`](docs/BACKEND_SAMPLES.md).
+
+The issuer signer's Ethereum transaction nonce and the HTTP
+`Idempotency-Key` protect blockchain writes; they do not implement citizen
+wallet login. Citizen login nonce challenges, wallet-signature verification,
+sessions, and wallet-connected frontend screens remain unimplemented.
+`TRUST_PROXY` is disabled for local/direct use and is needed only when Express
+is deployed behind a known reverse proxy.
 
 ## Document hashing
 

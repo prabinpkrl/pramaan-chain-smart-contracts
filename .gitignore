@@ -4,6 +4,7 @@ cache/
 coverage/
 typechain-types/
 types/
+backend/.data/
 
 .env
 .env.*

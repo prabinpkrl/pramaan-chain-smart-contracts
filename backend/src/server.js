@@ -15,13 +15,22 @@ import eventsTransformedRoutes from "./routes/eventsTransformed.js";
 import { errorHandler } from "./middleware/errors.js";
 import { readLimiter, writeLimiter } from "./middleware/rateLimit.js";
 import { authenticateWrite } from "./middleware/authenticateWrite.js";
-import { getCorsOrigins, parseInteger } from "./config.js";
+import {
+  getCorsOrigins,
+  getTrustProxy,
+  parseInteger,
+} from "./config.js";
 import { HttpError } from "./utils/httpError.js";
 import { redactSecrets } from "./utils/redact.js";
 
 export function createApp() {
   const app = express();
   const allowedOrigins = getCorsOrigins();
+  const trustProxy = getTrustProxy();
+
+  if (trustProxy !== false) {
+    app.set("trust proxy", trustProxy);
+  }
 
   app.use(cors({
     origin(origin, callback) {
@@ -81,19 +90,25 @@ export async function start() {
       );
     }
 
-    console.log("Building certificate index...");
-    try {
-      await buildIndex();
-    } catch (error) {
-      console.error(
-        `Certificate index unavailable: ${redactSecrets(error.message)}`,
-      );
-    }
-    startIndexPolling();
-
-    return app.listen(port, () => {
-      console.log(`PramaanChain backend listening on port ${port}`);
+    const server = app.listen(port);
+    await new Promise((resolve, reject) => {
+      server.once("listening", resolve);
+      server.once("error", reject);
     });
+    console.log(`PramaanChain backend listening on port ${port}`);
+
+    console.log("Building certificate index in the background...");
+    void buildIndex()
+      .catch((error) => {
+        console.error(
+          `Certificate index unavailable: ${redactSecrets(error.message)}`,
+        );
+      })
+      .finally(() => {
+        startIndexPolling();
+      });
+
+    return server;
   } catch (err) {
     console.error("Failed to start:", redactSecrets(err.message));
     throw err;

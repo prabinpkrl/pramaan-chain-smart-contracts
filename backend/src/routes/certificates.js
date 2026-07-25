@@ -6,15 +6,27 @@ import {
   getIndexSize,
   getSummary,
   getIndexState,
+  isIndexRetryDue,
   syncIndex,
 } from "../services/certificateIndex.js";
-import { badRequest } from "../utils/httpError.js";
-import { serviceUnavailable } from "../utils/httpError.js";
+import { parseInteger } from "../config.js";
+import {
+  badRequest,
+  serviceUnavailable,
+} from "../utils/httpError.js";
 import { redactSecrets } from "../utils/redact.js";
 
 const router = Router();
 
 async function refreshIndex() {
+  if (!isIndexRetryDue()) {
+    if (isIndexReady()) return;
+    throw serviceUnavailable(
+      "CERTIFICATE_INDEX_NOT_READY",
+      "Certificate index is not ready",
+    );
+  }
+
   try {
     await syncIndex();
   } catch (error) {
@@ -26,6 +38,21 @@ async function refreshIndex() {
     }
     console.warn(
       `Serving stale certificate index: ${redactSecrets(error.message)}`,
+    );
+  }
+}
+
+function parsePagination(value, name, fallback, maximum) {
+  try {
+    return parseInteger(value, name, {
+      fallback,
+      minimum: 1,
+      maximum,
+    });
+  } catch {
+    throw badRequest(
+      "INVALID_PAGINATION",
+      `${name} must be an integer between 1 and ${maximum}`,
     );
   }
 }
@@ -54,16 +81,6 @@ router.get("/certificates/summary", async (_req, res, next) => {
 
 router.get("/certificates", async (req, res, next) => {
   try {
-    await refreshIndex();
-    if (!isIndexReady()) {
-      return res.status(503).json({
-        error: {
-          code: "CERTIFICATE_INDEX_NOT_READY",
-          message: "Certificate index is not ready",
-        },
-      });
-    }
-
     const status = req.query.status?.toUpperCase();
     if (status && !["ACTIVE", "REVOKED"].includes(status)) {
       throw badRequest(
@@ -83,8 +100,23 @@ router.get("/certificates", async (req, res, next) => {
         );
       }
     }
-    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const page = parsePagination(
+      req.query.page,
+      "page",
+      1,
+      Number.MAX_SAFE_INTEGER,
+    );
+    const limit = parsePagination(req.query.limit, "limit", 20, 100);
+
+    await refreshIndex();
+    if (!isIndexReady()) {
+      return res.status(503).json({
+        error: {
+          code: "CERTIFICATE_INDEX_NOT_READY",
+          message: "Certificate index is not ready",
+        },
+      });
+    }
 
     const result = queryCertificates({ status, issuer, page, limit });
     return res.json({ ...result, index: getIndexState() });

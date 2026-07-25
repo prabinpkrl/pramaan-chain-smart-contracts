@@ -26,8 +26,12 @@ curl http://localhost:3000/api/health
   "issuerAddress": "0x4e02876F9bfd58f9D2D542F9520055BeD3addd28",
   "certificateIndex": {
     "ready": true,
+    "degraded": false,
     "size": 1,
-    "lastProcessedBlock": 11319998
+    "lastProcessedBlock": 11319998,
+    "consecutiveFailures": 0,
+    "lastFailure": null,
+    "nextRetryAt": "2026-07-25T12:00:15.000Z"
   },
   "timestamp": "2026-07-25T12:00:00.000Z"
 }
@@ -109,7 +113,10 @@ First successful request:
 ```
 
 Repeating the same request with the same idempotency key returns the same
-result with `"replayed": true` and does not submit another transaction.
+result with `"replayed": true` and does not submit another transaction, even
+after a restart of the same backend instance. If a crash leaves the operation
+unresolved, the same key is blocked until the transaction hash and on-chain
+state are reconciled.
 
 ### Revoke a certificate hash
 
@@ -168,8 +175,12 @@ curl "http://localhost:3000/api/certificates?status=ACTIVE&page=1&limit=20"
   },
   "index": {
     "ready": true,
+    "degraded": false,
     "size": 1,
-    "lastProcessedBlock": 11319998
+    "lastProcessedBlock": 11319998,
+    "consecutiveFailures": 0,
+    "lastFailure": null,
+    "nextRetryAt": "2026-07-25T12:00:15.000Z"
   }
 }
 ```

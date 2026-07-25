@@ -61,3 +61,17 @@ test("unapproved browser origins are rejected", async () => {
 
   delete process.env.CORS_ALLOWED_ORIGINS;
 });
+
+test("pagination rejects partially numeric values", async () => {
+  delete process.env.CORS_ALLOWED_ORIGINS;
+
+  await withServer(async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/api/certificates?page=1invalid`,
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.equal(body.error.code, "INVALID_PAGINATION");
+  });
+});

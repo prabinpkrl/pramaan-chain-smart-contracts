@@ -9,6 +9,9 @@ let lastProcessedBlock = null;
 let lastProcessedBlockHash = null;
 let syncPromise = null;
 let pollTimer = null;
+let consecutiveFailures = 0;
+let lastFailure = null;
+let nextRetryAt = null;
 
 function applyIssued(log, contract) {
   const parsed = contract.interface.parseLog(log);
@@ -48,34 +51,30 @@ function applyRevoked(log, contract) {
 
 async function processRange(from, to) {
   const contract = getReadContract();
-  const { eventChunkSize } = getBlockchainConfig();
+  const provider = getProvider();
+  const {
+    contractAddress,
+    eventChunkSize,
+  } = getBlockchainConfig();
+  const issuedTopic = contract.interface.getEvent(
+    "CertificateIssued",
+  ).topicHash;
+  const revokedTopic = contract.interface.getEvent(
+    "CertificateRevoked",
+  ).topicHash;
 
   for (let chunkFrom = from; chunkFrom <= to; chunkFrom += eventChunkSize) {
     const chunkTo = Math.min(to, chunkFrom + eventChunkSize - 1);
-    const [issuedLogs, revokedLogs] = await Promise.all([
-      contract.queryFilter(
-        contract.filters.CertificateIssued(),
-        chunkFrom,
-        chunkTo,
-      ),
-      contract.queryFilter(
-        contract.filters.CertificateRevoked(),
-        chunkFrom,
-        chunkTo,
-      ),
-    ]);
+    const logs = await provider.getLogs({
+      address: contractAddress,
+      topics: [[issuedTopic, revokedTopic]],
+      fromBlock: chunkFrom,
+      toBlock: chunkTo,
+    });
 
-    const logs = [
-      ...issuedLogs.map((log) => ({ kind: "issued", log })),
-      ...revokedLogs.map((log) => ({ kind: "revoked", log })),
-    ].sort(
-      (a, b) => a.log.blockNumber - b.log.blockNumber
-        || a.log.index - b.log.index,
-    );
-
-    for (const { kind, log } of logs) {
-      if (kind === "issued") applyIssued(log, contract);
-      else applyRevoked(log, contract);
+    for (const log of logs) {
+      if (log.topics[0] === issuedTopic) applyIssued(log, contract);
+      else if (log.topics[0] === revokedTopic) applyRevoked(log, contract);
     }
   }
 }
@@ -127,11 +126,46 @@ async function synchronize() {
   };
 }
 
+function markSyncSuccessful() {
+  consecutiveFailures = 0;
+  lastFailure = null;
+}
+
+function markSyncFailed(error) {
+  consecutiveFailures += 1;
+  lastFailure = {
+    code: error?.code || "EVENT_INDEX_UNAVAILABLE",
+    message: "Historical certificate index is unavailable",
+    at: new Date().toISOString(),
+  };
+}
+
+function getRetryDelay() {
+  const {
+    indexPollIntervalMs,
+    indexMaxRetryIntervalMs,
+  } = getBlockchainConfig();
+  const exponent = Math.max(0, consecutiveFailures - 1);
+  return Math.min(
+    indexPollIntervalMs * (2 ** exponent),
+    indexMaxRetryIntervalMs,
+  );
+}
+
 export function syncIndex() {
   if (!syncPromise) {
-    syncPromise = synchronize().finally(() => {
-      syncPromise = null;
-    });
+    syncPromise = synchronize()
+      .then((result) => {
+        markSyncSuccessful();
+        return result;
+      })
+      .catch((error) => {
+        markSyncFailed(error);
+        throw error;
+      })
+      .finally(() => {
+        syncPromise = null;
+      });
   }
   return syncPromise;
 }
@@ -141,6 +175,9 @@ export async function buildIndex() {
   indexReady = false;
   lastProcessedBlock = null;
   lastProcessedBlockHash = null;
+  consecutiveFailures = 0;
+  lastFailure = null;
+  nextRetryAt = null;
 
   const result = await syncIndex();
   console.log(`Certificate index built: ${certificates.size} certificates`);
@@ -149,22 +186,34 @@ export async function buildIndex() {
 
 export function startIndexPolling() {
   if (pollTimer) return pollTimer;
-  const { indexPollIntervalMs } = getBlockchainConfig();
 
-  pollTimer = setInterval(() => {
-    syncIndex().catch((error) => {
-      console.error(
-        `Certificate index synchronization failed: ${redactSecrets(error.message)}`,
-      );
-    });
-  }, indexPollIntervalMs);
-  pollTimer.unref();
+  function schedule() {
+    const delay = getRetryDelay();
+    nextRetryAt = new Date(Date.now() + delay).toISOString();
+    pollTimer = setTimeout(async () => {
+      pollTimer = null;
+      nextRetryAt = null;
+      try {
+        await syncIndex();
+      } catch (error) {
+        console.error(
+          `Certificate index synchronization failed; retrying with backoff: ${redactSecrets(error.message)}`,
+        );
+      } finally {
+        schedule();
+      }
+    }, delay);
+    pollTimer.unref();
+  }
+
+  schedule();
   return pollTimer;
 }
 
 export function stopIndexPolling() {
-  if (pollTimer) clearInterval(pollTimer);
+  if (pollTimer) clearTimeout(pollTimer);
   pollTimer = null;
+  nextRetryAt = null;
 }
 
 export function isIndexReady() {
@@ -178,9 +227,17 @@ export function getIndexSize() {
 export function getIndexState() {
   return {
     ready: indexReady,
+    degraded: consecutiveFailures > 0,
     size: certificates.size,
     lastProcessedBlock,
+    consecutiveFailures,
+    lastFailure,
+    nextRetryAt,
   };
+}
+
+export function isIndexRetryDue() {
+  return !nextRetryAt || Date.now() >= Date.parse(nextRetryAt);
 }
 
 export function getSummary() {

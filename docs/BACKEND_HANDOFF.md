@@ -558,6 +558,18 @@ Production network selection, production signing, administrator governance,
 QR payloads, citizen workflows, ownership proof, and any future contract
 extensions require separate design approval.
 
+The prototype gateway's ethers `NonceManager` handles only Ethereum
+transaction ordering for the configured issuer signer. Its persistent
+single-process `Idempotency-Key` journal prevents accidental repeated
+issue/revoke submissions. Neither feature implements citizen authentication.
+Citizen login still requires separate nonce-challenge generation, wallet
+signature verification, session handling, and frontend wallet integration.
+
+`TRUST_PROXY` is optional deployment configuration, not a frontend
+requirement. Keep it `false` for direct/local use and configure an exact trusted
+proxy-hop count only when the backend is actually behind a known reverse
+proxy.
+
 ## 15. Integration acceptance checklist
 
 The blockchain/backend integration is ready for the fellowship Sepolia
