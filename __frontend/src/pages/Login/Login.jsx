@@ -7,32 +7,29 @@ import Card from "../../components/common/Card";
 import Button from "../../components/common/Button";
 import { useAuth } from "../../context/useAuth";
 import { isMetaMaskInstalled } from "../../utils/wallet";
-
-const ROLE_HOME = {
-  admin: "/admin/dashboard",
-  issuer: "/issuer/dashboard",
-  citizen: "/citizen/dashboard",
-};
+import { homeForRole } from "../../utils/roleRoutes";
 
 function Login() {
-  const { connect, status } = useAuth();
+  const { signIn, loading } = useAuth();
   const navigate = useNavigate();
   const [localError, setLocalError] = useState(null);
 
-  const connecting = status === "connecting";
+  const connecting = loading;
   const metaMaskInstalled = isMetaMaskInstalled();
 
   const handleConnect = async () => {
     setLocalError(null);
 
     try {
-      const role = await connect();
-      toast.success("Wallet connected.");
-      navigate(ROLE_HOME[role] || "/", { replace: true });
-    } catch {
+      const session = await signIn();
+      const role = ["ADMIN", "ISSUER", "CITIZEN", "UNLINKED"]
+        .find((candidate) => session.roles.includes(candidate));
+      toast.success("Wallet signature verified.");
+      navigate(homeForRole(role), { replace: true });
+    } catch (error) {
       setLocalError(
         metaMaskInstalled
-          ? "Connection was rejected. Please try again."
+          ? error.message || "Wallet sign-in was rejected. Please try again."
           : "MetaMask is not installed in this browser.",
       );
     }
@@ -55,7 +52,7 @@ function Login() {
           {metaMaskInstalled ? (
             <Button onClick={handleConnect} loading={connecting}>
               <Wallet size={18} />
-              Connect with MetaMask
+              Sign in with wallet
             </Button>
           ) : (
             <a
@@ -74,9 +71,8 @@ function Login() {
           )}
 
           <p className="text-xs text-gray-400 mt-8">
-            Admins and authorized issuers are routed to their portals
-            automatically. Every other connected wallet lands on the Citizen
-            Portal to verify documents.
+            Signing verifies control of the wallet and does not submit a
+            blockchain transaction. Public verification does not require login.
           </p>
         </div>
       </Card>

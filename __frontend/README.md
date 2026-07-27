@@ -1,85 +1,57 @@
-# PramaanChain Frontend
+# PramaanChain Unified Frontend
 
-A single React + Vite app serving all three PramaanChain portals — **Admin**,
-**Issuer**, and **Citizen** — behind one MetaMask login, as recommended in
-the project's architecture notes (one app, shared components, role-based
-routing, rather than three separate builds).
+This React + Vite application provides the public verifier and the
+administrator, issuer, citizen, and unlinked-wallet views from one build.
 
-## Getting started
+## Run locally
+
+Start the read-only blockchain gateway on port `3000` and the private
+application backend on port `4000` first. Then:
 
 ```bash
-npm install
-cp .env.example .env   # then fill in your backend URL / admin addresses
+npm ci
+cp .env.example .env
+npm run lint
+npm test
 npm run dev
 ```
 
-Build for production:
+All `VITE_*` settings are public browser configuration. Never add RPC
+credentials, API keys, application encryption keys, or wallet private keys to
+this directory.
 
-```bash
-npm run build   # outputs to dist/
-```
+## Authentication and roles
 
-Lint (zero errors/warnings expected):
+Wallet sign-in uses a backend-generated EIP-4361 SIWE challenge. The
+application backend validates the signature and derives `ADMIN`, `ISSUER`,
+`CITIZEN`, or `UNLINKED`; the browser does not assert or persist trusted
+roles. An HttpOnly session cookie and CSRF token protect private operations.
+Multi-role wallets can switch portals from the header.
 
-```bash
-npm run lint
-```
+## Trust boundaries
 
-## How login & roles work
+- Public verification requires no wallet. The file is SHA-256 hashed locally
+  and only its `bytes32` digest is queried.
+- Citizen relationships, requests, and certificate assignments come from the
+  encrypted private application backend.
+- Issuers prepare a request in the private backend, sign the exact hash with
+  their injected wallet, and send the transaction hash back for independent
+  receipt validation.
+- QR codes contain only `/verify/<documentHash>` public URLs.
+- Administrator issuer authorization/removal is deliberately read-only in
+  this prototype; no administrator key or transaction flow exists here.
+- The blockchain gateway's optional API-key write endpoints are never called
+  by this browser application.
 
-1. The person clicks **Connect with MetaMask** (`src/pages/Login/Login.jsx`).
-2. Once a wallet address is returned, `src/utils/resolveRole.js` decides the
-   role:
-   - **Admin** — address matches `VITE_ADMIN_ADDRESSES` in `.env`. This is a
-     UI-only shortcut: the backend doesn't expose an admin-role lookup yet,
-     so it's not an access-control boundary by itself.
-   - **Issuer** — confirmed against the real `GET /api/issuer/:address`
-     endpoint.
-   - **Citizen** — the default for every other wallet. Anyone can verify a
-     document.
-3. `src/context/AuthContext.jsx` stores the address/role for the session and
-   `src/components/auth/ProtectedRoute.jsx` guards each portal's routes,
-   redirecting to the portal that matches the connected wallet's role.
+## Commands
 
-## Structure
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the Vite development server |
+| `npm run lint` | Check source and tests with ESLint |
+| `npm test` | Run the frontend unit tests |
+| `npm run build` | Build the production bundle under `dist/` |
+| `npm run preview` | Preview the built bundle |
 
-```
-src/
-  components/
-    auth/        ProtectedRoute
-    common/      Shared UI primitives (Button, Card, Modal, Badge, ...)
-    document/    DocumentDetails (shared verification/registry detail view)
-    layout/      DashboardLayout, Header, role-aware Sidebar
-  context/       AuthContext + useAuth hook
-  pages/
-    admin/       Dashboard, ManageIssuers, BlockchainMonitor, AuditLogs
-    issuer/      Dashboard, IssueDocument, DocumentRegistry, RevokedDocuments, Profile
-    citizen/     Dashboard, VerifyDocument, MyDocuments, VerificationHistory
-    Login/       MetaMask connect screen
-  routes/        AppRoutes.jsx — role-based route tree
-  services/      api.js (axios instance), documentService.js (backend calls)
-  utils/         wallet, hashing, validation, role resolution, verification history
-```
-
-## What's real vs. placeholder
-
-Everything that calls a real backend endpoint (see `docs/BACKEND_API.md`) is
-wired up live: issuing, revoking, verifying, listing documents, the issuer
-authorization check, health/monitor data, and the events feed for audit logs.
-
-A few pieces are intentionally UI-only placeholders because the backend
-doesn't have the matching endpoint yet — each is clearly labeled in the UI
-itself, not hidden:
-
-- **Admin → Manage Issuers**: authorize/remove actions are queued locally
-  (the on-chain `authorizeIssuer` / `removeIssuer` functions exist, but
-  aren't exposed over HTTP yet).
-- **Admin → Dashboard**: "Total Issuers", "Verified Today", and "Gas Used"
-  cards need dedicated endpoints.
-- **Citizen → My Documents / Verification History**: since the backend
-  doesn't track per-wallet document ownership or history, these are built
-  from a local, per-browser log of documents this device has verified
-  (stored in `localStorage`, see `src/utils/verificationHistory.js`).
-
-Once the corresponding backend routes exist, swapping the placeholder logic
-for a real API call is a small, contained change in each of those files.
+For complete startup, security, workflow, and API details, see
+[`../docs/FRONTEND_APPLICATION.md`](../docs/FRONTEND_APPLICATION.md).

@@ -3,20 +3,28 @@ import { LogOut } from "lucide-react";
 
 import { useAuth } from "../../context/useAuth";
 import { shortenAddress } from "../../utils/wallet";
+import { homeForRole } from "../../utils/roleRoutes";
 
 const ROLE_LABELS = {
-  admin: "Administrator",
-  issuer: "Issuer",
-  citizen: "Citizen",
+  ADMIN: "Administrator",
+  ISSUER: "Issuer",
+  CITIZEN: "Citizen",
+  UNLINKED: "Unlinked wallet",
 };
 
 function Header() {
-  const { address, role, disconnect } = useAuth();
+  const { session, activeRole, setActiveRole, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    disconnect();
-    navigate("/", { replace: true });
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  };
+
+  const handleRoleChange = (event) => {
+    const nextRole = event.target.value;
+    setActiveRole(nextRole);
+    navigate(homeForRole(nextRole));
   };
 
   return (
@@ -26,9 +34,26 @@ function Header() {
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="text-right hidden sm:block">
-          <p className="text-gray-700 font-medium">{ROLE_LABELS[role] || "Guest"}</p>
-          <p className="text-xs text-gray-400 font-mono">{shortenAddress(address)}</p>
+        <div className="text-right">
+          {session?.roles?.length > 1 ? (
+            <select
+              aria-label="Active portal"
+              value={activeRole || ""}
+              onChange={handleRoleChange}
+              className="rounded border border-gray-300 px-2 py-1 text-sm"
+            >
+              {session.roles.map((role) => (
+                <option key={role} value={role}>{ROLE_LABELS[role] || role}</option>
+              ))}
+            </select>
+          ) : (
+            <p className="text-gray-700 font-medium">
+              {ROLE_LABELS[activeRole] || "Guest"}
+            </p>
+          )}
+          <p className="text-xs text-gray-400 font-mono">
+            {shortenAddress(session?.address)}
+          </p>
         </div>
 
         <button

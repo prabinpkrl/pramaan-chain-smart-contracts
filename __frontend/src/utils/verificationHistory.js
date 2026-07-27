@@ -2,10 +2,9 @@ const STORAGE_KEY = "pramaanchain.verificationHistory";
 const MAX_ENTRIES = 100;
 
 /**
- * The backend does not persist per-citizen verification history or document
- * ownership (see docs/FRONTEND_INTEGRATION.md — no citizen sessions yet), so
- * this is stored locally in the browser. It's a convenience list of what
- * *this device* has checked, not an authoritative or shared record.
+ * Public verification history is a local browser convenience only. Private
+ * citizen certificate assignments come from the application backend and are
+ * deliberately separate from this non-authoritative device history.
  */
 export function getVerificationHistory() {
   try {

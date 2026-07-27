@@ -177,7 +177,7 @@ The clean-install walkthrough result is recorded in
 
 ## Sepolia backend gateway
 
-The `defy` branch includes an Express and ethers.js prototype gateway in
+The repository includes an Express and ethers.js prototype gateway in
 `backend/`. It provides provider-only verification, confirmed certificate
 and event queries, and protected issuer write endpoints.
 
@@ -207,11 +207,34 @@ requests, responses, and limitations are documented in
 [`docs/BACKEND_SAMPLES.md`](docs/BACKEND_SAMPLES.md).
 
 The issuer signer's Ethereum transaction nonce and the HTTP
-`Idempotency-Key` protect blockchain writes; they do not implement citizen
-wallet login. Citizen login nonce challenges, wallet-signature verification,
-sessions, and wallet-connected frontend screens remain unimplemented.
+`Idempotency-Key` protect the gateway's optional server-side writes; they are
+separate from citizen SIWE challenges and application request reservations.
 `TRUST_PROXY` is disabled for local/direct use and is needed only when Express
 is deployed behind a known reverse proxy.
+
+## Prototype application and frontend
+
+The explicitly approved prototype application is implemented in
+`app-backend/` and `__frontend/`. It adds:
+
+- public browser-side file hashing and Sepolia verification;
+- wallet authentication through standard SIWE messages;
+- backend-derived administrator, issuer, citizen, and unlinked capabilities;
+- AES-256-GCM encrypted citizen, institution, request, and certificate
+  assignment fields in SQLite;
+- 128-bit one-time institution claim codes;
+- atomic `PENDING -> PROCESSING -> ISSUED` request handling;
+- issuer transactions signed directly in an injected browser wallet; and
+- private citizen assignment views and hash-only verification QR codes.
+
+The blockchain proves certificate authenticity. The private database records
+citizen assignment. A wallet signature proves control of the assigned wallet.
+The contract does not store or prove citizen ownership, and loss of the
+private database loses that assignment.
+
+Installation, environment variables, service startup order, API endpoints,
+security rules, and limitations are documented in
+[`docs/FRONTEND_APPLICATION.md`](docs/FRONTEND_APPLICATION.md).
 
 ## Document hashing
 
@@ -243,10 +266,14 @@ contracts/PramaanChain.sol       Smart contract
 test/PramaanChain.test.js        Complete automated test suite
 backend/src/                     Sepolia backend gateway
 backend/test/                    Backend unit and API tests
+app-backend/src/                 Private SIWE and relationship service
+app-backend/test/                Application security and workflow tests
+__frontend/                      Public, issuer, and citizen React portal
 scripts/deploy.js                Local deployment-only script
 scripts/demo.js                  Checked local or Sepolia lifecycle demonstration
 docs/CONTRACT_DESIGN.md          Detailed contract specification
 docs/BACKEND_HANDOFF.md          Later-integration reference
+docs/FRONTEND_APPLICATION.md     Prototype application integration guide
 docs/STAGE8_DEMONSTRATION.md     Captured local execution evidence
 docs/STAGE9_VALIDATION.md        Clean-install and handoff validation evidence
 docs/SEPOLIA_PREPARATION.md      Stage 10 network and secret preparation
@@ -261,9 +288,9 @@ Sepolia deployment and Etherscan verification are complete. The following
 remain deferred:
 
 - Ethereum mainnet or production EVM deployment;
-- full citizen/institution backend, database, sessions, and durable queue;
-- frontend, QR-code, citizen registration, login, wallet, or delivery features;
-- document storage or citizen ownership proof;
+- production application hosting, database operations, backup, and recovery;
+- wallet recovery, address rotation, or certificate-file delivery;
+- document storage or on-chain citizen ownership proof;
 - production key management through KMS, HSM, or Vault;
 - production monitoring, multisignature control, and administrator recovery;
 - proxies, upgradeability, pausing, or batch issuance; and

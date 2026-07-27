@@ -5,6 +5,7 @@ coverage/
 typechain-types/
 types/
 backend/.data/
+app-backend/.data/
 
 .env
 .env.*

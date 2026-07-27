@@ -1,33 +1,9 @@
-import { useEffect, useState } from "react";
-
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { useAuth } from "../../context/useAuth";
-import { checkIssuer } from "../../services/documentService";
-
-const NETWORK_NAME = import.meta.env.VITE_NETWORK_NAME || "Sepolia Testnet";
-const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || "-";
+import { config } from "../../config";
 
 function Profile() {
-  const { address } = useAuth();
-  const [authorized, setAuthorized] = useState(null);
-
-  useEffect(() => {
-    let mounted = true;
-
-    if (!address) return undefined;
-
-    checkIssuer(address)
-      .then((result) => {
-        if (mounted) setAuthorized(Boolean(result.authorized));
-      })
-      .catch(() => {
-        if (mounted) setAuthorized(null);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [address]);
+  const { session } = useAuth();
 
   return (
     <DashboardLayout>
@@ -47,11 +23,9 @@ function Profile() {
           <div>
             <p className="text-gray-500 text-sm">Authorization Status</p>
             <p className="font-semibold">
-              {authorized === null
-                ? "Checking..."
-                : authorized
-                  ? "🟢 Authorized Issuer"
-                  : "🔴 Not Authorized"}
+              {session.roles.includes("ISSUER")
+                ? "🟢 Authorized issuer"
+                : "🔴 Not authorized"}
             </p>
           </div>
         </div>
@@ -63,21 +37,33 @@ function Profile() {
         <div className="space-y-6">
           <div>
             <p className="text-gray-500 text-sm">Network</p>
-            <p className="font-semibold">{NETWORK_NAME}</p>
+            <p className="font-semibold">Sepolia Testnet ({config.chainId})</p>
           </div>
 
           <div>
             <p className="text-gray-500 text-sm">Wallet Address</p>
             <p className="font-mono text-sm break-all bg-gray-100 p-3 rounded-lg">
-              {address}
+              {session.address}
             </p>
           </div>
 
           <div>
             <p className="text-gray-500 text-sm">Smart Contract Address</p>
             <p className="font-mono text-sm break-all bg-gray-100 p-3 rounded-lg">
-              {CONTRACT_ADDRESS}
+              {config.contractAddress}
             </p>
+          </div>
+
+          <div>
+            <p className="text-gray-500 text-sm">Institution memberships</p>
+            <ul className="mt-2 space-y-2">
+              {session.issuerMemberships.map((institution) => (
+                <li key={institution.id} className="rounded-lg bg-gray-100 p-3">
+                  <span className="font-semibold">{institution.name}</span>
+                  <span className="ml-2 font-mono text-xs text-gray-500">{institution.id}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>

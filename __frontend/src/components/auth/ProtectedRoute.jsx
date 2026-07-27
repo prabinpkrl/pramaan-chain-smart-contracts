@@ -1,27 +1,27 @@
 import { Navigate } from "react-router-dom";
 
 import { useAuth } from "../../context/useAuth";
-
-const ROLE_HOME = {
-  admin: "/admin/dashboard",
-  issuer: "/issuer/dashboard",
-  citizen: "/citizen/dashboard",
-};
+import { homeForRole } from "../../utils/roleRoutes";
 
 /**
  * Guards a portal's routes. If no wallet is connected, sends the user back
  * to login. If a wallet is connected but its role doesn't match this portal,
  * redirects to the portal it does belong to, instead of showing a dead end.
  */
-function ProtectedRoute({ allowedRole, children }) {
-  const { address, role, status } = useAuth();
+function ProtectedRoute({ allowedRoles, children }) {
+  const { session, activeRole, loading } = useAuth();
+  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
 
-  if (status === "idle" || !address) {
-    return <Navigate to="/" replace />;
+  if (loading) {
+    return <div className="min-h-screen grid place-items-center">Loading secure session…</div>;
   }
 
-  if (role !== allowedRole) {
-    return <Navigate to={ROLE_HOME[role] || "/"} replace />;
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!roles.includes(activeRole) || !session.roles.includes(activeRole)) {
+    return <Navigate to={homeForRole(activeRole)} replace />;
   }
 
   return children;

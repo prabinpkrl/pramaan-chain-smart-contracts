@@ -67,7 +67,7 @@ function VerificationHistory() {
                     {entry.documentHash?.slice(0, 20)}...
                   </td>
                   <td className="px-6">
-                    <Badge status={entry.status === "ACTIVE" ? "Active" : "Revoked"} />
+                    <Badge status={entry.status} />
                   </td>
                   <td className="px-6 text-sm text-gray-500">
                     {entry.checkedAt

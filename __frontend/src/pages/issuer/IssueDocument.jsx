@@ -1,202 +1,232 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
-import { UploadCloud, FileCheck2 } from "lucide-react";
 
+import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
+import Input from "../../components/common/Input";
 import DashboardLayout from "../../components/layout/DashboardLayout";
-import EtherscanLink from "../../components/common/EtherscanLink";
-
-import { issueDocument } from "../../services/documentService";
+import { useAuth } from "../../context/useAuth";
+import { apiErrorMessage } from "../../services/api";
+import { issueOnChain } from "../../services/contractService";
+import {
+  confirmIssuance,
+  createClaimCode,
+  listIssuerRequests,
+  prepareIssuance,
+  rejectRequest,
+} from "../../services/documentService";
 import { hashDocument } from "../../utils/hashDocument";
-import { isValidDocumentHash } from "../../utils/validateHash";
-
-const ACCEPTED_TYPES =
-  ".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.csv,.xlsx,.zip";
+import { formatDate } from "../../utils/format";
 
 function IssueDocument() {
-  const navigate = useNavigate();
+  const { session } = useAuth();
+  const [institutionId, setInstitutionId] = useState(session.issuerMemberships[0]?.id || "");
+  const [requests, setRequests] = useState([]);
+  const [files, setFiles] = useState({});
+  const [transactionHashes, setTransactionHashes] = useState({});
+  const [recipientReference, setRecipientReference] = useState("");
+  const [claim, setClaim] = useState(null);
+  const [busyId, setBusyId] = useState("");
 
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
+  const load = useCallback(async () => {
+    if (!institutionId) return;
+    setRequests(await listIssuerRequests(institutionId));
+  }, [institutionId]);
 
-  const handleFileChange = (e) => {
-    setSelectedFile(e.target.files[0] || null);
-    setResult(null);
+  useEffect(() => {
+    if (!institutionId) return;
+    listIssuerRequests(institutionId)
+      .then(setRequests)
+      .catch((error) => toast.error(apiErrorMessage(error)));
+  }, [institutionId]);
+
+  const generateClaim = async (event) => {
+    event.preventDefault();
+    try {
+      setClaim(await createClaimCode(institutionId, recipientReference.trim()));
+      setRecipientReference("");
+      toast.success("Single-use claim code created.");
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!selectedFile) {
-      toast.error("Please upload a document first.");
+  const issue = async (request) => {
+    const file = files[request.id];
+    if (!file) {
+      toast.error("Select the exact certificate file for this request.");
       return;
     }
-
+    setBusyId(request.id);
     try {
-      setLoading(true);
-
-      const documentHash = await hashDocument(selectedFile);
-
-      if (!isValidDocumentHash(documentHash)) {
-        throw new Error("Generated document hash is invalid.");
+      const documentHash = await hashDocument(file);
+      if (
+        request.documentHash
+        && request.documentHash.toLowerCase() !== documentHash.toLowerCase()
+      ) {
+        throw new Error("This processing request is locked to a different document hash.");
       }
-
-      const response = await issueDocument(documentHash);
-
-      setResult({
-        documentName: selectedFile.name,
-        documentSize: selectedFile.size,
-        documentHash,
-        transactionHash: response.transactionHash,
-        blockNumber: response.blockNumber,
-        timestamp: response.issuedAt || Math.floor(Date.now() / 1000),
-      });
-
-      toast.success("Document issued successfully!");
+      if (!window.confirm(`Issue the local file with SHA-256 hash ${documentHash}?`)) return;
+      const prepared = await prepareIssuance(request.id, institutionId, documentHash);
+      const transactionHash = await issueOnChain(documentHash, session.address);
+      await confirmIssuance(request.id, institutionId, prepared.attemptId, transactionHash);
+      await load();
+      toast.success("Certificate issued and receipt confirmed.");
     } catch (error) {
-      console.error(error);
-
-      toast.error(error.response?.data?.error?.message || "Document issuance failed.");
+      toast.error(apiErrorMessage(error));
+      await load().catch(() => undefined);
     } finally {
-      setLoading(false);
+      setBusyId("");
     }
   };
 
-  const handleReset = () => {
-    setSelectedFile(null);
-    setResult(null);
+  const reconcile = async (request) => {
+    const transactionHash = transactionHashes[request.id]?.trim();
+    if (!transactionHash) {
+      toast.error("Enter the already-submitted Sepolia transaction hash.");
+      return;
+    }
+    setBusyId(request.id);
+    try {
+      await confirmIssuance(
+        request.id,
+        institutionId,
+        request.attemptId,
+        transactionHash,
+      );
+      await load();
+      toast.success("Existing transaction reconciled.");
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const reject = async (requestId) => {
+    if (!window.confirm("Reject this pending request?")) return;
+    try {
+      await rejectRequest(requestId, institutionId);
+      await load();
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    }
   };
 
   return (
     <DashboardLayout>
-      <h1 className="text-3xl font-bold mb-6">Issue Document</h1>
+      <div className="mb-6 flex items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+            Institution-scoped queue
+          </p>
+          <h1 className="text-3xl font-bold">Issue Certificates</h1>
+        </div>
+        {session.issuerMemberships.length > 1 && (
+          <select
+            value={institutionId}
+            onChange={(event) => setInstitutionId(event.target.value)}
+            className="rounded-lg border border-gray-300 p-3"
+          >
+            {session.issuerMemberships.map((institution) => (
+              <option key={institution.id} value={institution.id}>{institution.name}</option>
+            ))}
+          </select>
+        )}
+      </div>
 
-      <div className="bg-white rounded-xl shadow p-8 max-w-3xl">
-        {!result ? (
-          <form onSubmit={handleSubmit}>
-            <div className="mb-6">
-              <label className="block text-sm font-medium mb-2">
-                Upload Document
-              </label>
+      <section className="mb-8 rounded-xl bg-white p-6 shadow">
+        <h2 className="text-xl font-semibold">Create citizen claim code</h2>
+        <p className="mb-4 mt-1 text-sm text-gray-600">
+          Use an opaque internal reference, never a name or government identifier.
+          The single-use code expires and is displayed only here.
+        </p>
+        <form className="max-w-xl" onSubmit={generateClaim}>
+          <Input
+            id="recipientReference"
+            label="Opaque recipient reference"
+            value={recipientReference}
+            onChange={(event) => setRecipientReference(event.target.value)}
+            placeholder="REQUEST-2026-001"
+          />
+          <Button
+            type="submit"
+            disabled={!institutionId || recipientReference.trim().length < 3}
+          >
+            Generate code
+          </Button>
+        </form>
+        {claim && (
+          <div className="mt-5 rounded-lg border border-amber-300 bg-amber-50 p-4">
+            <strong>Copy this code now:</strong>
+            <code className="my-2 block break-all rounded bg-white p-3">{claim.code}</code>
+            <span className="text-sm text-gray-600">Expires {formatDate(claim.expiresAt)}</span>
+          </div>
+        )}
+      </section>
 
-              <div className="space-y-3">
-                <input
-                  id="documentFile"
+      <div className="grid gap-5">
+        {requests.map((request) => (
+          <article key={request.id} className="rounded-xl bg-white p-6 shadow">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">{request.certificateType}</h2>
+                <p className="text-sm text-gray-500">
+                  Reference: {request.recipientReference || "Private assignment"}
+                </p>
+              </div>
+              <Badge status={request.status} />
+            </div>
+            <dl className="mt-4 grid gap-3 md:grid-cols-2">
+              <div><dt className="text-sm text-gray-500">Request ID</dt><dd className="break-all font-mono text-xs">{request.id}</dd></div>
+              <div><dt className="text-sm text-gray-500">Created</dt><dd>{formatDate(request.createdAt)}</dd></div>
+              {request.documentHash && (
+                <div className="md:col-span-2"><dt className="text-sm text-gray-500">Frozen hash</dt><dd className="break-all font-mono text-xs">{request.documentHash}</dd></div>
+              )}
+            </dl>
+            {(request.status === "PENDING" || request.status === "PROCESSING") && (
+              <div className="mt-5 border-t pt-5">
+                <Input
+                  id={`file-${request.id}`}
+                  label="Exact certificate file"
                   type="file"
-                  accept={ACCEPTED_TYPES}
-                  onChange={handleFileChange}
-                  className="hidden"
+                  onChange={(event) => setFiles((current) => ({
+                    ...current,
+                    [request.id]: event.target.files?.[0],
+                  }))}
                 />
-
-                <label
-                  htmlFor="documentFile"
-                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white cursor-pointer hover:bg-blue-700 transition"
-                >
-                  <UploadCloud size={18} />
-                  Select File
-                </label>
-
-                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3 text-sm text-gray-600">
-                  {selectedFile ? (
-                    <div>
-                      <p className="font-medium text-gray-800">
-                        📄 {selectedFile.name}
-                      </p>
-
-                      <p className="text-xs text-gray-500 mt-1">
-                        {(selectedFile.size / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                  ) : (
-                    <p>No file selected</p>
+                <div className="flex flex-wrap gap-3">
+                  <Button onClick={() => issue(request)} loading={busyId === request.id}>
+                    {request.status === "PROCESSING" ? "Resume same-hash issuance" : "Prepare and issue"}
+                  </Button>
+                  {request.status === "PENDING" && (
+                    <Button variant="danger" onClick={() => reject(request.id)}>Reject</Button>
                   )}
                 </div>
-
-                <p className="text-xs text-gray-500">
-                  Supported: PDF, DOC, DOCX, PNG, JPG, JPEG, TXT, CSV, XLSX,
-                  ZIP — any file can be hashed and anchored on-chain.
-                </p>
               </div>
-            </div>
-
-            {/* Workflow preview */}
-            <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 mb-6 text-sm text-blue-800">
-              <p className="font-semibold mb-2">What happens next</p>
-
-              <ol className="list-decimal list-inside space-y-1">
-                <li>Your browser generates a SHA-256 hash of the file.</li>
-                <li>Only the hash — never the document — is sent to the server.</li>
-                <li>Your wallet's authorization is used to submit the transaction.</li>
-                <li>The hash is stored permanently on the Sepolia blockchain.</li>
-              </ol>
-            </div>
-
-            <Button type="submit" loading={loading}>
-              Issue Document
-            </Button>
-          </form>
-        ) : (
-          <div className="space-y-6">
-            <div className="flex items-center gap-3 text-green-700">
-              <FileCheck2 size={28} />
-              <h2 className="text-xl font-semibold">Document Issued</h2>
-            </div>
-
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Document Name</p>
-                <p className="font-semibold break-all">{result.documentName}</p>
+            )}
+            {request.status === "PROCESSING" && (
+              <div className="mt-5 rounded-lg bg-blue-50 p-4">
+                <Input
+                  id={`tx-${request.id}`}
+                  label="Already-submitted transaction hash"
+                  value={transactionHashes[request.id] || ""}
+                  onChange={(event) => setTransactionHashes((current) => ({
+                    ...current,
+                    [request.id]: event.target.value,
+                  }))}
+                  placeholder="0x…"
+                />
+                <Button variant="secondary" onClick={() => reconcile(request)}>
+                  Reconcile without resending
+                </Button>
               </div>
-
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Document Size</p>
-                <p className="font-semibold">
-                  {(result.documentSize / 1024).toFixed(1)} KB
-                </p>
-              </div>
-
-              <div className="col-span-2">
-                <p className="text-sm text-gray-500 mb-1">SHA-256 Hash</p>
-                <p className="font-mono text-xs break-all bg-gray-100 p-3 rounded-lg">
-                  {result.documentHash}
-                </p>
-              </div>
-
-              {result.transactionHash && (
-                <div className="col-span-2">
-                  <p className="text-sm text-gray-500 mb-1">Transaction Hash</p>
-                  <p className="font-mono text-xs break-all bg-gray-100 p-3 rounded-lg">
-                    {result.transactionHash}
-                  </p>
-                  <div className="mt-2">
-                    <EtherscanLink txHash={result.transactionHash} />
-                  </div>
-                </div>
-              )}
-
-              {result.blockNumber && (
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Block Number</p>
-                  <p className="font-semibold">{result.blockNumber}</p>
-                </div>
-              )}
-
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Timestamp</p>
-                <p className="font-semibold">
-                  {new Date(result.timestamp * 1000).toLocaleString()}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-4 pt-4 border-t">
-              <Button onClick={handleReset}>Issue Another Document</Button>
-              <Button variant="secondary" onClick={() => navigate("/issuer/documents")}>
-                View Document Registry
-              </Button>
-            </div>
+            )}
+          </article>
+        ))}
+        {requests.length === 0 && (
+          <div className="rounded-xl bg-white p-8 text-center text-gray-500 shadow">
+            No requests for this institution.
           </div>
         )}
       </div>

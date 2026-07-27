@@ -4,8 +4,8 @@ import QRCode from "react-qr-code";
 import Button from "../common/Button";
 import Badge from "../common/Badge";
 import EtherscanLink from "../common/EtherscanLink";
-
-const VERIFY_BASE_URL = import.meta.env.VITE_VERIFY_BASE_URL || `${window.location.origin}/citizen/verify`;
+import { config } from "../../config";
+import { verificationUrl } from "../../utils/format";
 
 function DocumentDetails({ document, onClose }) {
   if (!document) return null;
@@ -151,11 +151,7 @@ function DocumentDetails({ document, onClose }) {
         <div className="flex justify-center">
           <div className="bg-white border rounded-xl p-4 shadow-sm">
             <QRCode
-              value={JSON.stringify({
-                documentHash: document.documentHash,
-                transactionHash: document.transactionHash,
-                verificationUrl: `${VERIFY_BASE_URL}/${document.documentHash}`,
-              })}
+              value={verificationUrl(config.publicAppUrl, document.documentHash)}
               size={180}
             />
           </div>

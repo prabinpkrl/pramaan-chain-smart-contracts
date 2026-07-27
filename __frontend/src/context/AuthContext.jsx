@@ -1,106 +1,100 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-import { connectWallet, getConnectedAccounts } from "../utils/wallet";
-import { resolveRole } from "../utils/resolveRole";
+import {
+  connectWalletAndSignIn,
+  getSession,
+  logout as logoutRequest,
+} from "../services/authService";
 import AuthContext from "./authContextStore";
 
-const SESSION_KEY = "pramaanchain.session";
+const ROLE_PRIORITY = ["ADMIN", "ISSUER", "CITIZEN", "UNLINKED"];
 
-function readSession() {
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeSession(session) {
-  try {
-    if (session) {
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    } else {
-      sessionStorage.removeItem(SESSION_KEY);
-    }
-  } catch {
-    // sessionStorage unavailable (e.g. private browsing) — session simply
-    // won't survive a refresh, which is an acceptable degradation.
-  }
+function defaultRole(session) {
+  return ROLE_PRIORITY.find((role) => session?.roles?.includes(role)) || null;
 }
 
 export function AuthProvider({ children }) {
-  const [address, setAddress] = useState(null);
-  const [role, setRole] = useState(null);
-  const [status, setStatus] = useState("idle"); // idle | connecting | ready | error
+  const [session, setSession] = useState(null);
+  const [activeRole, setActiveRoleState] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const disconnect = useCallback(() => {
-    setAddress(null);
-    setRole(null);
-    setStatus("idle");
-    writeSession(null);
+  const applySession = useCallback((next) => {
+    setSession(next);
+    setActiveRoleState((current) =>
+      next?.roles?.includes(current) ? current : defaultRole(next));
   }, []);
 
-  // Restore a session left by a previous connect, and pick up an already
-  // connected MetaMask account on refresh without prompting again.
+  const refresh = useCallback(async () => {
+    try {
+      applySession(await getSession());
+    } catch {
+      applySession(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [applySession]);
+
   useEffect(() => {
-    (async () => {
-      const cached = readSession();
-      const [connected] = await getConnectedAccounts();
-
-      if (connected && cached?.address?.toLowerCase() === connected.toLowerCase()) {
-        setAddress(cached.address);
-        setRole(cached.role);
-        setStatus("ready");
-      }
-    })();
-  }, []);
+    getSession()
+      .then(applySession)
+      .catch(() => applySession(null))
+      .finally(() => setLoading(false));
+  }, [applySession]);
 
   useEffect(() => {
     if (!window.ethereum) return undefined;
-
-    const handleAccountsChanged = (accounts) => {
-      if (!accounts || accounts.length === 0) {
-        disconnect();
-      } else if (accounts[0].toLowerCase() !== address?.toLowerCase()) {
-        // Wallet switched accounts mid-session: drop back to login so the
-        // role can be re-resolved for the new address.
-        disconnect();
-      }
+    const reset = () => {
+      applySession(null);
+      logoutRequest().catch(() => undefined);
     };
+    window.ethereum.on?.("accountsChanged", reset);
+    window.ethereum.on?.("chainChanged", reset);
+    return () => {
+      window.ethereum.removeListener?.("accountsChanged", reset);
+      window.ethereum.removeListener?.("chainChanged", reset);
+    };
+  }, [applySession]);
 
-    window.ethereum.on?.("accountsChanged", handleAccountsChanged);
-    return () => window.ethereum.removeListener?.("accountsChanged", handleAccountsChanged);
-  }, [address, disconnect]);
-
-  const connect = useCallback(async () => {
-    setStatus("connecting");
+  const signIn = useCallback(async () => {
+    setLoading(true);
     setError(null);
-
     try {
-      const { address: connectedAddress } = await connectWallet();
-      const resolvedRole = await resolveRole(connectedAddress);
-
-      setAddress(connectedAddress);
-      setRole(resolvedRole);
-      setStatus("ready");
-      writeSession({ address: connectedAddress, role: resolvedRole });
-
-      return resolvedRole;
+      const next = await connectWalletAndSignIn();
+      applySession(next);
+      return next;
     } catch (err) {
-      setStatus("error");
-      setError(
-        err.message === "METAMASK_NOT_INSTALLED"
-          ? "MetaMask is not installed in this browser."
-          : "Wallet connection was rejected or failed.",
-      );
+      setError(err.message || "Wallet sign-in failed");
       throw err;
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [applySession]);
+
+  const logout = useCallback(async () => {
+    try {
+      await logoutRequest();
+    } finally {
+      applySession(null);
+    }
+  }, [applySession]);
+
+  const setActiveRole = useCallback((role) => {
+    if (session?.roles?.includes(role)) setActiveRoleState(role);
+  }, [session]);
 
   const value = useMemo(
-    () => ({ address, role, status, error, connect, disconnect }),
-    [address, role, status, error, connect, disconnect],
+    () => ({
+      session,
+      activeRole,
+      loading,
+      error,
+      signIn,
+      logout,
+      refresh,
+      setActiveRole,
+      address: session?.address || null,
+    }),
+    [session, activeRole, loading, error, signIn, logout, refresh, setActiveRole],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

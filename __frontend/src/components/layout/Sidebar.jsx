@@ -16,30 +16,34 @@ import {
 import { useAuth } from "../../context/useAuth";
 
 const NAV_ITEMS = {
-  admin: [
+  ADMIN: [
     { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/admin/issuers", label: "Manage Issuers", icon: Users },
     { to: "/admin/monitor", label: "Blockchain Monitor", icon: Activity },
     { to: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText },
   ],
-  issuer: [
+  ISSUER: [
     { to: "/issuer/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/issuer/issue", label: "Issue Document", icon: FilePlus2 },
     { to: "/issuer/documents", label: "Document Registry", icon: Files },
     { to: "/issuer/revoked", label: "Revoked Documents", icon: Ban },
     { to: "/issuer/profile", label: "Profile", icon: UserCircle },
   ],
-  citizen: [
+  CITIZEN: [
     { to: "/citizen/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/citizen/verify", label: "Verify Document", icon: ShieldCheck },
+    { to: "/citizen/requests", label: "Certificate Requests", icon: FilePlus2 },
     { to: "/citizen/my-documents", label: "My Documents", icon: FolderClock },
+    { to: "/verify", label: "Public Verifier", icon: ShieldCheck },
     { to: "/citizen/history", label: "Verification History", icon: History },
+  ],
+  UNLINKED: [
+    { to: "/citizen/claim", label: "Claim Institution", icon: ShieldCheck },
   ],
 };
 
 function Sidebar() {
-  const { role } = useAuth();
-  const items = NAV_ITEMS[role] || [];
+  const { activeRole } = useAuth();
+  const items = NAV_ITEMS[activeRole] || [];
 
   const linkClass = ({ isActive }) =>
     `flex items-center gap-3 px-4 py-3 rounded-lg transition ${

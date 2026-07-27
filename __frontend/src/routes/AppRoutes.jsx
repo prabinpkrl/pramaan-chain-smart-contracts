@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-import { useAuth } from "../context/useAuth";
 import ProtectedRoute from "../components/auth/ProtectedRoute";
 
+import Home from "../pages/Home/Home";
 import Login from "../pages/Login/Login";
 
 import AdminDashboard from "../pages/admin/Dashboard";
@@ -20,32 +20,23 @@ import CitizenDashboard from "../pages/citizen/Dashboard";
 import VerifyDocument from "../pages/citizen/VerifyDocument";
 import MyDocuments from "../pages/citizen/MyDocuments";
 import VerificationHistory from "../pages/citizen/VerificationHistory";
-
-const ROLE_HOME = {
-  admin: "/admin/dashboard",
-  issuer: "/issuer/dashboard",
-  citizen: "/citizen/dashboard",
-};
-
-function RootRedirect() {
-  const { address, role } = useAuth();
-
-  if (!address) return <Login />;
-
-  return <Navigate to={ROLE_HOME[role] || "/"} replace />;
-}
+import ClaimInstitution from "../pages/citizen/ClaimInstitution";
+import CitizenRequests from "../pages/citizen/CitizenRequests";
 
 function AppRoutes() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<RootRedirect />} />
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/verify" element={<VerifyDocument />} />
+        <Route path="/verify/:documentHash" element={<VerifyDocument />} />
 
         {/* Admin Portal */}
         <Route
           path="/admin/dashboard"
           element={
-            <ProtectedRoute allowedRole="admin">
+            <ProtectedRoute allowedRoles="ADMIN">
               <AdminDashboard />
             </ProtectedRoute>
           }
@@ -53,7 +44,7 @@ function AppRoutes() {
         <Route
           path="/admin/issuers"
           element={
-            <ProtectedRoute allowedRole="admin">
+            <ProtectedRoute allowedRoles="ADMIN">
               <ManageIssuers />
             </ProtectedRoute>
           }
@@ -61,7 +52,7 @@ function AppRoutes() {
         <Route
           path="/admin/monitor"
           element={
-            <ProtectedRoute allowedRole="admin">
+            <ProtectedRoute allowedRoles="ADMIN">
               <BlockchainMonitor />
             </ProtectedRoute>
           }
@@ -69,7 +60,7 @@ function AppRoutes() {
         <Route
           path="/admin/audit-logs"
           element={
-            <ProtectedRoute allowedRole="admin">
+            <ProtectedRoute allowedRoles="ADMIN">
               <AuditLogs />
             </ProtectedRoute>
           }
@@ -79,7 +70,7 @@ function AppRoutes() {
         <Route
           path="/issuer/dashboard"
           element={
-            <ProtectedRoute allowedRole="issuer">
+            <ProtectedRoute allowedRoles="ISSUER">
               <IssuerDashboard />
             </ProtectedRoute>
           }
@@ -87,7 +78,7 @@ function AppRoutes() {
         <Route
           path="/issuer/issue"
           element={
-            <ProtectedRoute allowedRole="issuer">
+            <ProtectedRoute allowedRoles="ISSUER">
               <IssueDocument />
             </ProtectedRoute>
           }
@@ -95,7 +86,7 @@ function AppRoutes() {
         <Route
           path="/issuer/documents"
           element={
-            <ProtectedRoute allowedRole="issuer">
+            <ProtectedRoute allowedRoles="ISSUER">
               <DocumentRegistry />
             </ProtectedRoute>
           }
@@ -103,7 +94,7 @@ function AppRoutes() {
         <Route
           path="/issuer/revoked"
           element={
-            <ProtectedRoute allowedRole="issuer">
+            <ProtectedRoute allowedRoles="ISSUER">
               <RevokedDocuments />
             </ProtectedRoute>
           }
@@ -111,7 +102,7 @@ function AppRoutes() {
         <Route
           path="/issuer/profile"
           element={
-            <ProtectedRoute allowedRole="issuer">
+            <ProtectedRoute allowedRoles="ISSUER">
               <IssuerProfile />
             </ProtectedRoute>
           }
@@ -121,23 +112,16 @@ function AppRoutes() {
         <Route
           path="/citizen/dashboard"
           element={
-            <ProtectedRoute allowedRole="citizen">
+            <ProtectedRoute allowedRoles="CITIZEN">
               <CitizenDashboard />
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/citizen/verify"
-          element={
-            <ProtectedRoute allowedRole="citizen">
-              <VerifyDocument />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/citizen/verify" element={<Navigate to="/verify" replace />} />
         <Route
           path="/citizen/my-documents"
           element={
-            <ProtectedRoute allowedRole="citizen">
+            <ProtectedRoute allowedRoles="CITIZEN">
               <MyDocuments />
             </ProtectedRoute>
           }
@@ -145,8 +129,24 @@ function AppRoutes() {
         <Route
           path="/citizen/history"
           element={
-            <ProtectedRoute allowedRole="citizen">
+            <ProtectedRoute allowedRoles="CITIZEN">
               <VerificationHistory />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/citizen/claim"
+          element={
+            <ProtectedRoute allowedRoles={["UNLINKED", "CITIZEN"]}>
+              <ClaimInstitution />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/citizen/requests"
+          element={
+            <ProtectedRoute allowedRoles="CITIZEN">
+              <CitizenRequests />
             </ProtectedRoute>
           }
         />

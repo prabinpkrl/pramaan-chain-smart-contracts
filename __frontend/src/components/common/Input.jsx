@@ -6,6 +6,7 @@ function Input({
   placeholder,
   value,
   onChange,
+  ...inputProps
 }) {
   const inputId = id || name;
 
@@ -22,6 +23,7 @@ function Input({
         placeholder={placeholder}
         value={value}
         onChange={onChange}
+        {...inputProps}
         className="w-full rounded-lg border border-gray-300 p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
