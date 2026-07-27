@@ -40,17 +40,17 @@ ignored by Git, so compile before attempting to load it.
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `npm run compile` | Compile the Solidity contract and generate artifacts |
-| `npm test` | Run the complete contract test suite |
-| `npm run coverage` | Run tests with Solidity coverage reporting |
-| `npm run clean` | Remove Hardhat-generated build output |
-| `npm run local:node` | Start a persistent local Hardhat JSON-RPC node |
-| `npm run local:deploy` | Deploy a fresh contract to the running local node |
-| `npm run local:demo` | Run the full checked local certificate lifecycle |
-| `npm run sepolia:deploy-demo` | Run the guarded synthetic lifecycle on Sepolia; requires explicit deployment approval |
-| `npm run sepolia:verify -- <address>` | Verify a deployed Sepolia address on Etherscan |
+| Command                               | Purpose                                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------------- |
+| `npm run compile`                     | Compile the Solidity contract and generate artifacts                                  |
+| `npm test`                            | Run the complete contract test suite                                                  |
+| `npm run coverage`                    | Run tests with Solidity coverage reporting                                            |
+| `npm run clean`                       | Remove Hardhat-generated build output                                                 |
+| `npm run local:node`                  | Start a persistent local Hardhat JSON-RPC node                                        |
+| `npm run local:deploy`                | Deploy a fresh contract to the running local node                                     |
+| `npm run local:demo`                  | Run the full checked local certificate lifecycle                                      |
+| `npm run sepolia:deploy-demo`         | Run the guarded synthetic lifecycle on Sepolia; requires explicit deployment approval |
+| `npm run sepolia:verify -- <address>` | Verify a deployed Sepolia address on Etherscan                                        |
 
 ## Local deployment
 
@@ -97,14 +97,14 @@ Sepolia is configured as an HTTP layer-1 network with chain ID `11155111`.
 Configuration values are lazy, so local compilation, tests, and demonstrations
 do not require Sepolia secrets.
 
-| Item | Public Sepolia testnet value |
-| --- | --- |
-| Contract address | [`0x0bb21729BBDaBe54A289A1e924941F8F635Cab84`](https://sepolia.etherscan.io/address/0x0bb21729BBDaBe54A289A1e924941F8F635Cab84) |
-| Chain ID | `11155111` |
-| Deployment commit | `73a711d0694197e70e2c262fffd587183c7414fa` |
-| Administrator | `0x3537d004295AF62098e63DCF6bB8A7c6dAaCB447` |
-| Authorized issuer | `0x4e02876F9bfd58f9D2D542F9520055BeD3addd28` |
-| Source verification | [Verified contract on Etherscan](https://sepolia.etherscan.io/address/0x0bb21729BBDaBe54A289A1e924941F8F635Cab84#code) |
+| Item                | Public Sepolia testnet value                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Contract address    | [`0x0bb21729BBDaBe54A289A1e924941F8F635Cab84`](https://sepolia.etherscan.io/address/0x0bb21729BBDaBe54A289A1e924941F8F635Cab84) |
+| Chain ID            | `11155111`                                                                                                                      |
+| Deployment commit   | `73a711d0694197e70e2c262fffd587183c7414fa`                                                                                      |
+| Administrator       | `0x3537d004295AF62098e63DCF6bB8A7c6dAaCB447`                                                                                    |
+| Authorized issuer   | `0x4e02876F9bfd58f9D2D542F9520055BeD3addd28`                                                                                    |
+| Source verification | [Verified contract on Etherscan](https://sepolia.etherscan.io/address/0x0bb21729BBDaBe54A289A1e924941F8F635Cab84#code)          |
 
 The complete deployment, transaction, block, gas, lifecycle, and bytecode
 evidence is recorded in
@@ -135,11 +135,11 @@ rerun against Sepolia without a new explicitly approved deployment operation.
 
 ## Contract roles
 
-| Role | Permissions |
-| --- | --- |
-| Administrator | Authorize issuers, remove issuers, and revoke any certificate |
+| Role              | Permissions                                                          |
+| ----------------- | -------------------------------------------------------------------- |
+| Administrator     | Authorize issuers, remove issuers, and revoke any certificate        |
 | Authorized issuer | Issue new certificate hashes and revoke its own earlier certificates |
-| Public verifier | Read certificate records and verification status without a signer |
+| Public verifier   | Read certificate records and verification status without a signer    |
 
 The deployer receives `ADMIN_ROLE`. It does not automatically receive
 `ISSUER_ROLE`. Administrator membership is fixed in this version; inherited
@@ -149,23 +149,23 @@ certificates or prevent it from revoking certificates it originally issued.
 
 ## Application interface
 
-| Function | Who may call | Result |
-| --- | --- | --- |
-| `authorizeIssuer(address issuer)` | Administrator | Grants issuer authorization |
-| `removeIssuer(address issuer)` | Administrator | Removes future issuance permission |
-| `isAuthorizedIssuer(address issuer)` | Anyone | Returns `bool` |
-| `issueCertificate(bytes32 documentHash)` | Authorized issuer | Stores a unique active certificate record |
-| `getCertificate(bytes32 documentHash)` | Anyone | Returns issuer, timestamps, and status |
-| `verifyCertificate(bytes32 documentHash)` | Anyone | Returns the verification status enum |
+| Function                                  | Who may call                     | Result                                    |
+| ----------------------------------------- | -------------------------------- | ----------------------------------------- |
+| `authorizeIssuer(address issuer)`         | Administrator                    | Grants issuer authorization               |
+| `removeIssuer(address issuer)`            | Administrator                    | Removes future issuance permission        |
+| `isAuthorizedIssuer(address issuer)`      | Anyone                           | Returns `bool`                            |
+| `issueCertificate(bytes32 documentHash)`  | Authorized issuer                | Stores a unique active certificate record |
+| `getCertificate(bytes32 documentHash)`    | Anyone                           | Returns issuer, timestamps, and status    |
+| `verifyCertificate(bytes32 documentHash)` | Anyone                           | Returns the verification status enum      |
 | `revokeCertificate(bytes32 documentHash)` | Original issuer or administrator | Permanently revokes an issued certificate |
 
 Verification status values are stable ABI integers:
 
-| Value | Name | Meaning |
-| ---: | --- | --- |
-| `0` | `NOT_FOUND` | The hash has never been issued |
-| `1` | `ACTIVE` | The hash was issued and has not been revoked |
-| `2` | `REVOKED` | The certificate was permanently revoked |
+| Value | Name        | Meaning                                      |
+| ----: | ----------- | -------------------------------------------- |
+|   `0` | `NOT_FOUND` | The hash has never been issued               |
+|   `1` | `ACTIVE`    | The hash was issued and has not been revoked |
+|   `2` | `REVOKED`   | The certificate was permanently revoked      |
 
 The complete function, event, error, and state-transition specification is in
 [`docs/CONTRACT_DESIGN.md`](docs/CONTRACT_DESIGN.md). Backend configuration,
@@ -230,3 +230,5 @@ remain deferred:
 - zero-knowledge proofs.
 
 These require separate design and explicit authorization.
+
+11
