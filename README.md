@@ -225,6 +225,8 @@ The explicitly approved prototype application is implemented in
 - 128-bit one-time institution claim codes;
 - atomic `PENDING -> PROCESSING -> ISSUED` request handling;
 - issuer transactions signed directly in an injected browser wallet; and
+- administrator issuer authorization signed directly by the authenticated
+  administrator's injected browser wallet;
 - private citizen assignment views and hash-only verification QR codes.
 
 The blockchain proves certificate authenticity. The private database records

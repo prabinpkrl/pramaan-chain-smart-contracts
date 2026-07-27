@@ -1,10 +1,24 @@
-import { BrowserProvider, Contract, getAddress } from "ethers";
+import { BrowserProvider, Contract, ZeroAddress, getAddress } from "ethers";
 import { config } from "../config";
 
 const ABI = [
   "function issueCertificate(bytes32 documentHash)",
   "function revokeCertificate(bytes32 documentHash)",
+  "function authorizeIssuer(address issuer)",
 ];
+
+export function validateIssuerAddress(value) {
+  let normalized;
+  try {
+    normalized = getAddress(value);
+  } catch {
+    throw new Error("Enter a valid Ethereum issuer address");
+  }
+  if (normalized === ZeroAddress) {
+    throw new Error("The zero address cannot be authorized");
+  }
+  return normalized;
+}
 
 async function signerFor(expectedAddress) {
   if (!window.ethereum) throw new Error("A compatible browser wallet is required");
@@ -28,10 +42,10 @@ async function signerFor(expectedAddress) {
   return signer;
 }
 
-async function send(method, documentHash, expectedAddress) {
+async function send(method, argument, expectedAddress) {
   const signer = await signerFor(expectedAddress);
   const contract = new Contract(config.contractAddress, ABI, signer);
-  const transaction = await contract[method](documentHash);
+  const transaction = await contract[method](argument);
   const receipt = await transaction.wait();
   if (!receipt || receipt.status !== 1) {
     throw new Error("The blockchain transaction did not succeed");
@@ -44,3 +58,10 @@ export const issueOnChain = (documentHash, expectedAddress) =>
 
 export const revokeOnChain = (documentHash, expectedAddress) =>
   send("revokeCertificate", documentHash, expectedAddress);
+
+export const authorizeIssuerOnChain = (issuerAddress, expectedAdminAddress) =>
+  send(
+    "authorizeIssuer",
+    validateIssuerAddress(issuerAddress),
+    expectedAdminAddress,
+  );

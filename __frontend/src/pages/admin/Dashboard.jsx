@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
+import Button from "../../components/common/Button";
 
 import { getDocuments, getHealth } from "../../services/documentService";
 
 function Dashboard() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({ total: "--", active: "--", revoked: "--" });
   const [chainStatus, setChainStatus] = useState("Loading...");
 
@@ -54,6 +57,17 @@ function Dashboard() {
         <StatCard title="Total Documents" value={stats.total} color="blue" />
         <StatCard title="Revoked Documents" value={stats.revoked} color="red" />
         <StatCard title="Blockchain Status" value={chainStatus} color="yellow" />
+      </div>
+
+      <div className="mb-8 rounded-xl bg-white p-6 shadow">
+        <h2 className="mb-2 text-xl font-semibold">Issuer Administration</h2>
+        <p className="mb-4 text-gray-600">
+          Check an issuer or authorize a new issuer using the connected
+          administrator wallet.
+        </p>
+        <Button onClick={() => navigate("/admin/issuers")}>
+          Check or Authorize Issuer
+        </Button>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">

@@ -32,6 +32,15 @@ or `APP_DATA_ENCRYPTION_KEY`. Issuer writes are signed directly by an injected
 browser wallet. The blockchain gateway's protected write routes are not used
 by this frontend.
 
+Administrator issuer authorization is also signed directly by the currently
+authenticated administrator's injected wallet. The frontend waits for the
+receipt and verifies the resulting issuer status through the read-only
+gateway. No administrator private key is loaded into either backend. Issuer
+removal remains outside the prototype UI. On-chain authorization alone does
+not create a private institution membership; the application backend must
+already contain that separately managed relationship before it derives the
+`ISSUER` application role.
+
 ## Local setup
 
 Use Node.js `22.13.0` or newer.
@@ -213,7 +222,8 @@ The frontend uses the blockchain gateway's public
 
 - This is a local fellowship prototype, not a production deployment.
 - Wallet recovery and address rotation are not implemented.
-- The seeded institution workflow has no administrator UI.
+- The administrator UI supports adding an issuer on-chain, but not issuer
+  removal or institution-membership administration.
 - A processing request deliberately requires same-hash resumption or manual
   transaction reconciliation.
 - Encrypted database backup, rotation, and disaster recovery require a later

@@ -38,8 +38,10 @@ Multi-role wallets can switch portals from the header.
   their injected wallet, and send the transaction hash back for independent
   receipt validation.
 - QR codes contain only `/verify/<documentHash>` public URLs.
-- Administrator issuer authorization/removal is deliberately read-only in
-  this prototype; no administrator key or transaction flow exists here.
+- Issuer authorization is signed directly by the authenticated administrator
+  wallet and verified through a read-only chain lookup after confirmation.
+  The administrator key never enters either backend. Issuer removal remains
+  outside this prototype UI.
 - The blockchain gateway's optional API-key write endpoints are never called
   by this browser application.
 
