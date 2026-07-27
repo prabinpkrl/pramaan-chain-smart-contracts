@@ -28,6 +28,12 @@ application backend validates the signature and derives `ADMIN`, `ISSUER`,
 roles. An HttpOnly session cookie and CSRF token protect private operations.
 Multi-role wallets can switch portals from the header.
 
+The login screen first connects the injected browser wallet and displays its
+address, network, and balance. Wallet connection alone is not login: the user
+must separately sign the backend's one-time SIWE message. The frontend can
+request Sepolia or add its public network metadata when the wallet does not
+already know that chain.
+
 ## Trust boundaries
 
 - Public verification requires no wallet. A verifier can paste a

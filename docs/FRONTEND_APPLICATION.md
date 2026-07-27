@@ -106,6 +106,14 @@ belongs in the frontend environment.
 
 ## Authentication and roles
 
+The login screen separates wallet connection from authentication. It first
+connects the injected browser wallet and displays the selected public address,
+current chain, and optional balance. Balance lookup is presentational and
+cannot block login. The user can change the exposed account and the frontend
+can request or add the public Sepolia network metadata. Only the subsequent
+SIWE signature creates an application session; connecting a wallet alone does
+not assign a role or authenticate the user.
+
 The nonce request contains only the public wallet address. The frontend cannot
 select a trusted role. After validating the EIP-4361 SIWE message and
 signature, the application backend derives capabilities:
