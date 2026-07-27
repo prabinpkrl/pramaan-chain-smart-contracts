@@ -2,6 +2,11 @@
 
 Date: 2026-07-21
 
+> Historical pre-deployment evidence. Stage 11 subsequently completed on the
+> same date. See [`SEPOLIA_DEPLOYMENT.md`](SEPOLIA_DEPLOYMENT.md). The
+> commands below remain a record of the Stage 10 boundary and do not authorize
+> another public-network transaction.
+
 ## Scope
 
 Stage 10 prepared lazy Sepolia configuration, guarded deployment commands,
@@ -74,6 +79,7 @@ npm run sepolia:deploy-demo
 npm run sepolia:verify -- <DEPLOYED_CONTRACT_ADDRESS>
 ```
 
-Wallet creation, faucet funding, Sepolia preflight, deployment, lifecycle
-transactions, and Etherscan verification remain Stage 11 work after an
-independent readiness review and separate approval.
+At the end of Stage 10, wallet creation, faucet funding, Sepolia preflight,
+deployment, lifecycle transactions, and Etherscan verification remained Stage
+11 work pending independent readiness review and separate approval. That
+approved work is now recorded in `SEPOLIA_DEPLOYMENT.md`.

@@ -13,7 +13,10 @@ repeatable deployment and full-flow demonstration on a local Hardhat node.
 Stage 9 adds the clean-install guide and backend handoff documentation without
 changing the approved contract behavior. Stage 10 prepares a guarded Sepolia
 configuration and independent review process, also without changing the
-contract behavior.
+contract behavior. Stage 11 deployed and source-verified that reviewed
+contract on Sepolia on 2026-07-21 at
+`0x0bb21729BBDaBe54A289A1e924941F8F635Cab84`. The later gateway, private
+backend, and frontend integrations did not change this contract design.
 
 The contract stores certificate proof and blockchain metadata only. Document
 contents, citizen information, detailed revocation reasons, and other personal
@@ -365,3 +368,7 @@ The following are not part of this design:
 - batching, upgradeability, pausing, or zero-knowledge proofs.
 
 Changing any of these boundaries requires explicit approval and a design update.
+
+The gateway, database, QR, and wallet features are now implemented as separate
+off-chain components. They remain outside this contract's state and trust
+boundary; document storage and on-chain ownership proof remain deferred.

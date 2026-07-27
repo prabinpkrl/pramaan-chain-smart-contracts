@@ -11,6 +11,11 @@ interaction. It does not store certificate data — all state lives on-chain.
 Original documents and personal information remain off-chain under the
 application's own authorization and retention policies.
 
+This gateway is distinct from `app-backend/`, which now implements SIWE,
+private institution relationships, and browser-wallet transaction
+confirmation. The React frontend uses this gateway for public reads and does
+not call its protected server-side write routes.
+
 ### 1.1 Service boundary
 
 | Operation | Blockchain connection | Gas required | Access rule |
@@ -18,8 +23,8 @@ application's own authorization and retention policies.
 | `verifyCertificate` | Provider only | None | Public or rate-limited |
 | `getCertificate` | Provider only | None | Public or rate-limited |
 | `isAuthorizedIssuer` | Provider only | None | Internal health check or public lookup |
-| `issueCertificate` | Issuer signer | Sepolia ETH | Authenticated institution mapped to that signer |
-| `revokeCertificate` | Original issuer signer | Sepolia ETH | Authenticated original issuer or administrator |
+| `issueCertificate` | Configured issuer signer | Sepolia ETH | Valid `WRITE_API_KEY` and `Idempotency-Key` |
+| `revokeCertificate` | Configured original issuer signer | Sepolia ETH | Valid `WRITE_API_KEY` and `Idempotency-Key`; no administrator key is loaded |
 | Event indexing | Provider only | None | Internal indexing service |
 
 ### 1.2 Security boundary
@@ -35,14 +40,14 @@ application's own authorization and retention policies.
 
 ### 1.3 Nonce and replay concepts
 
-The current gateway has two blockchain-write protections, but it does not yet
-implement citizen wallet login:
+The gateway has two blockchain-write protections. Citizen wallet login is
+implemented separately in `app-backend/`:
 
 | Concept | Implemented? | Purpose |
 | --- | --- | --- |
 | Ethereum transaction nonce | Yes | ethers `NonceManager` assigns the issuer wallet's transaction sequence and reloads it after a definite pre-broadcast failure |
 | HTTP `Idempotency-Key` | Yes | Prevents one logical issue/revoke request from producing duplicate blockchain transactions |
-| Citizen login nonce and wallet signature | No | A future authentication backend must issue a short-lived random challenge and verify the citizen's signed response |
+| SIWE challenge nonce | In `app-backend/` | Proves wallet control using a short-lived, single-use signed message |
 
 An Ethereum transaction nonce is blockchain transaction ordering, not a login
 challenge. An `Idempotency-Key` is an application request identifier and does
@@ -51,7 +56,8 @@ not prove wallet ownership.
 At startup, the gateway derives the issuer public address from
 `ISSUER_PRIVATE_KEY`, matches it against `ISSUER_ADDRESS`, and reads its
 current on-chain issuer authorization. It does not authenticate citizen
-wallets or create user sessions.
+wallets or create user sessions because those responsibilities belong to the
+private application backend.
 
 ## 2. Requirements
 
@@ -334,9 +340,9 @@ hexadecimal string (32-byte SHA-256 digest).
 
 | Value | Name | Meaning |
 | --- | --- | --- |
-| `NOT_FOUND` | The hash has never been issued |
-| `ACTIVE` | The hash was issued and has not been revoked |
-| `REVOKED` | The certificate was permanently revoked |
+| `0` | `NOT_FOUND` | The hash has never been issued |
+| `1` | `ACTIVE` | The hash was issued and has not been revoked |
+| `2` | `REVOKED` | The certificate was permanently revoked |
 
 ---
 
@@ -382,7 +388,89 @@ Returns whether the given address is an authorized issuer on-chain.
 
 ---
 
-### 7.5 Issue certificate
+### 7.5 List indexed certificates
+
+```
+GET /api/certificates?status=ACTIVE&issuer=0x4e02...&page=1&limit=20
+```
+
+Returns one current record per issued hash from the confirmed event index.
+
+| Query | Default | Rule |
+| --- | --- | --- |
+| `status` | all | `ACTIVE` or `REVOKED` |
+| `issuer` | all | Valid Ethereum address |
+| `page` | `1` | Positive integer |
+| `limit` | `20` | Integer from 1 to 100 |
+
+**Response `200 OK`:**
+
+```json
+{
+  "certificates": [
+    {
+      "documentHash": "0x039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+      "status": "ACTIVE",
+      "issuer": "0x4e02876F9bfd58f9D2D542F9520055BeD3addd28",
+      "issuedAt": 1721750400,
+      "revokedAt": 0,
+      "issueTxHash": "0x...",
+      "issueBlockNumber": 11318774,
+      "revokeTxHash": null,
+      "revokeBlockNumber": null,
+      "revokedBy": null
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "totalPages": 1
+  },
+  "summary": {
+    "total": 1,
+    "active": 1,
+    "revoked": 0
+  },
+  "index": {
+    "ready": true,
+    "degraded": false
+  }
+}
+```
+
+If historical indexing has not completed, this endpoint returns `503` with
+`CERTIFICATE_INDEX_NOT_READY`. Direct `/api/verify/:documentHash` calls remain
+available.
+
+---
+
+### 7.6 Certificate summary
+
+```
+GET /api/certificates/summary
+```
+
+Returns confirmed totals and index health:
+
+```json
+{
+  "total": 45,
+  "active": 40,
+  "revoked": 5,
+  "indexSize": 45,
+  "index": {
+    "ready": true,
+    "degraded": false,
+    "size": 45,
+    "lastProcessedBlock": 11320000
+  }
+}
+```
+
+---
+
+### 7.7 Issue certificate
 
 ```
 POST /api/write/issue
@@ -470,7 +558,7 @@ body returns `409 Conflict`.
 
 ---
 
-### 7.6 Revoke certificate
+### 7.8 Revoke certificate
 
 ```
 POST /api/write/revoke
@@ -515,7 +603,7 @@ issuance are required here.
 
 ---
 
-### 7.7 Query events
+### 7.9 Query raw events
 
 ```
 GET /api/events?from=<block>&to=<block>
@@ -567,6 +655,36 @@ Events are sorted by block number and ethers v6 log index. Queries are
 stateless: repeating the same confirmed range returns the same results.
 Requested end blocks are clamped to the confirmed head, and ranges larger
 than `EVENT_MAX_RANGE` are rejected.
+
+---
+
+### 7.10 Query transformed events
+
+```
+GET /api/events/transformed?from=11318772&to=11320000&type=issuance
+```
+
+Returns confirmed domain events with normalized names and timestamps for
+frontend display. The optional `type` is one of `issuance`, `revocation`,
+`authorization`, or `removal`.
+
+```json
+{
+  "events": [
+    {
+      "type": "issuance",
+      "documentHash": "0x039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+      "issuer": "0x4e02876F9bfd58f9D2D542F9520055BeD3addd28",
+      "issuedAt": "1721750400",
+      "timestamp": 1721750400,
+      "blockNumber": 11318774,
+      "transactionHash": "0x...",
+      "logIndex": 0
+    }
+  ],
+  "count": 1
+}
+```
 
 ## 8. Error handling
 
@@ -758,15 +876,16 @@ head, and ranges larger than `EVENT_MAX_RANGE` are rejected.
 ## 14. Known limitations
 
 This backend is a Sepolia prototype integration. The following are not
-implemented:
+implemented in this gateway:
 
 - Production network deployment or mainnet signing;
 - persistent database-backed event and certificate storage;
-- citizen and institution-user authentication, sessions, roles, and
-  institution-scoped authorization;
+- SIWE, citizen and institution-user sessions, private roles, and
+  institution-scoped authorization, which are implemented in `app-backend/`;
 - database-backed shared idempotency and a transaction queue for multiple
   processes (the prototype journal supports one process only);
-- frontend, QR code, or citizen workflow integration;
+- direct browser-wallet transaction signing, which is implemented in
+  `__frontend/` and independently confirmed by `app-backend/`;
 - KMS, HSM, Vault, or production key management;
 - monitoring, alerting, or structured logging;
 - automatic retry or dead-letter queues for failed transactions;
@@ -775,10 +894,10 @@ implemented:
 
 These require separate design and explicit authorization.
 
-There is currently no citizen wallet-connect authentication endpoint,
-login-challenge nonce, signature verification, session/JWT creation, or
-frontend wallet integration. Those features are separate from the implemented
-issuer-wallet validation used for blockchain writes.
+The gateway intentionally has no wallet-connect authentication endpoint,
+login challenge, or user session. See
+[`FRONTEND_APPLICATION.md`](FRONTEND_APPLICATION.md) for those implemented
+application features.
 
 ## 15. Running locally
 

@@ -1,5 +1,10 @@
 # PramaanChain Cryptography Engine (Prototype)
 
+> Historical compact overview. The current implementation distributes these
+> responsibilities across the browser frontend, private application backend,
+> public blockchain gateway, and contract. See
+> [`CRYPTOGRAPHY_ENGINE.md`](CRYPTOGRAPHY_ENGINE.md) for the current boundary.
+
 ## 1. Overview
 This document describes the prototype Cryptography Engine used by PramaanChain on the Ethereum Sepolia network. It performs SHA-256 hashing, document validation, issuance, verification, and blockchain interaction through ethers v6.
 
@@ -55,7 +60,8 @@ Authorization is determined by `isAuthorizedIssuer(address)`.
 ## 7. Security
 - Documents remain off-chain.
 - Only SHA-256 hashes are anchored.
-- Private keys remain server-side.
+- Wallet private keys remain inside the injected wallet; the optional gateway
+  signer remains server-side.
 - Write operations require an authorized issuer.
 
 ## 8. Deferred Features
@@ -66,4 +72,6 @@ Authorization is determined by `isAuthorizedIssuer(address)`.
 - Zero-knowledge proofs
 
 ## 9. Future Enhancements
-Production deployments should replace environment-based signing with HSM/KMS and implement PKI, holder binding, and advanced cryptographic services.
+Production deployments require a separately approved custody design such as
+HSM/KMS, organization-managed multisignature administration, and any approved
+PKI or holder-binding model.

@@ -1,14 +1,19 @@
 # Sepolia Preparation
 
+> Historical Stage 10 preparation record. Stage 11 subsequently completed on
+> 2026-07-21. See [`SEPOLIA_DEPLOYMENT.md`](SEPOLIA_DEPLOYMENT.md) for the
+> deployed address and transaction evidence. These instructions do not
+> authorize another deployment.
+
 ## 1. Status and boundary
 
-Stage 10 prepares PramaanChain for Sepolia chain ID `11155111`. It does not
-deploy the contract, authorize an issuer, issue or revoke a certificate, verify
-source code, create wallets, request faucet funds, or send any public-network
-transaction.
+Stage 10 prepared PramaanChain for Sepolia chain ID `11155111`. During that
+stage it did not deploy the contract, authorize an issuer, issue or revoke a
+certificate, verify source code, create wallets, request faucet funds, or send
+any public-network transaction.
 
-Sepolia deployment remains Stage 11 work and requires both an independent
-Stage 10 `PASS` review and separate explicit approval.
+The later Stage 11 deployment required both an independent Stage 10 `PASS`
+review and separate explicit approval.
 
 ## 2. Network configuration
 

@@ -4,6 +4,11 @@ These examples describe the current Sepolia prototype API. Replace sample
 hashes and secrets with synthetic development values. Never put a private key,
 RPC credential, certificate content, or personal information in a request.
 
+The public read examples may be used by the frontend. Protected
+`/api/write/*` examples are server-to-server gateway examples only; the
+current React application signs issuer transactions in the injected wallet
+and never embeds `WRITE_API_KEY`.
+
 Base URL:
 
 ```text

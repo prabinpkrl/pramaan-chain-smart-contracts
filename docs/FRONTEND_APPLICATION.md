@@ -90,6 +90,11 @@ portal. The portal authorizes a new primary issuer with the administrator's
 browser wallet when necessary, then registers the public institution ID and
 encrypted issuer membership through the application backend.
 
+The repository intentionally contains no seed command or default application
+records. After the explicit database wipe, the first institution must be
+provisioned through this administrator flow. Resetting SQLite does not alter
+the deployed contract or any existing Sepolia state.
+
 ### Frontend
 
 ```bash
@@ -217,17 +222,23 @@ Principal endpoints:
 
 | Method and route | Purpose |
 | --- | --- |
+| `GET /api/health` | Check the application backend and chain connection |
 | `POST /api/auth/nonce` | Build a SIWE message for an address |
 | `POST /api/auth/verify` | Verify signature and derive roles |
 | `GET /api/auth/session` | Refresh authorization and CSRF token |
+| `POST /api/auth/logout` | Invalidate the current session |
 | `GET /api/admin/institutions` | List registered institutions and authorization |
 | `POST /api/admin/institutions` | Register an authorized primary issuer and public institution ID |
 | `POST /api/citizen/institutions/connect` | Connect the SIWE wallet using a public institution ID |
 | `GET /api/citizen/institutions` | List the citizen's connected institutions |
 | `POST /api/citizen/requests` | Create a private institution request |
+| `GET /api/citizen/requests` | List the citizen's institution-scoped requests |
+| `GET /api/citizen/certificates` | List proofs privately assigned to the citizen |
 | `GET /api/issuer/requests` | Read an institution-scoped queue |
+| `POST /api/issuer/requests/:id/reject` | Reject a pending request |
 | `POST /api/issuer/requests/:id/prepare-issuance` | Freeze request and hash |
 | `POST /api/issuer/requests/:id/confirm-issuance` | Validate issuance receipt |
+| `GET /api/issuer/certificates` | List certificates issued by the institution |
 | `POST /api/issuer/certificates/:id/prepare-revocation` | Validate exact original issuer |
 | `POST /api/issuer/certificates/:id/confirm-revocation` | Validate revocation receipt |
 

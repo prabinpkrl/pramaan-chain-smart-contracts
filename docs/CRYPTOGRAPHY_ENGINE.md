@@ -1,396 +1,157 @@
-# PramaanChain Cryptography Engine Documentation
+# PramaanChain Cryptographic and Blockchain Boundary
 
-## 1. Introduction
+## 1. Current implementation
 
-The PramaanChain Cryptography Engine is the off-chain service responsible for document hashing, certificate issuance, certificate verification, and blockchain interaction with the PramaanChain smart contract on Ethereum Sepolia. It acts as the bridge between issuer/verifier applications and the on-chain certificate registry.
-
-The engine never stores or transmits raw certificate data or citizen identity. Only SHA-256 document hashes are anchored to the blockchain.
-
-## 2. Architecture
-
-```
-Issuer Portal / Verifier App
-            |
-        API Gateway
-            |
-    +-----------------------------+
-    | Cryptography Engine         |
-    |                             |
-    |  +-----------------------+  |
-    |  | SHA-256 Hashing       |  |
-    |  +-----------------------+  |
-    |  | Hash Validation       |  |
-    |  +-----------------------+  |
-    |  | Issuance Service      |  |
-    |  +-----------------------+  |
-    |  | Verification Service  |  |
-    |  +-----------------------+  |
-    |  | Revocation Service    |  |
-    |  +-----------------------+  |
-    |  | Blockchain Adapter    |  |
-    |  | (ethers v6)           |  |
-    |  +-----------------------+  |
-    +-----------------------------+
-            |
-      Ethereum Sepolia (Chain ID 11155111)
-            |
-  PramaanChain Smart Contract
-  0x0bb21729BBDaBe54A289A1e924941F8F635Cab84
-```
-
-### 2.1 Component Responsibilities
+“Cryptography engine” is a logical boundary in the current prototype, not one
+service that receives certificate files and controls every signer. Its
+responsibilities are deliberately split:
 
 | Component | Responsibility |
-|---|---|
-| SHA-256 Hashing | Compute deterministic hashes from raw certificate bytes |
-| Hash Validation | Ensure hashes are valid 32-byte `0x`-prefixed hex strings |
-| Issuance Service | Submit `issueCertificate()` transactions and confirm receipts |
-| Verification Service | Query `verifyCertificate()` and `getCertificate()` on-chain |
-| Revocation Service | Submit `revokeCertificate()` transactions and confirm receipts |
-| Blockchain Adapter | Manage ethers v6 provider, signer, and transaction lifecycle |
-
-## 3. Configuration
-
-### 3.1 Environment Variables
-
-| Variable | Required | Purpose |
-|---|---|---|
-| `SEPOLIA_RPC_URL` | Yes | Ethereum Sepolia JSON-RPC endpoint |
-| `ISSUER_PRIVATE_KEY` | Write ops only | Private key for the authorized issuer signer |
-| `DEPLOYER_PRIVATE_KEY` | Deployment only | Private key for the contract administrator/deployer |
-| `ETHERSCAN_API_KEY` | Verification only | Etherscan API key for source verification |
-
-### 3.2 Hardhat Keystore (Preferred)
-
-```bash
-npx hardhat keystore set SEPOLIA_RPC_URL
-npx hardhat keystore set DEPLOYER_PRIVATE_KEY
-npx hardhat keystore set ISSUER_PRIVATE_KEY
-npx hardhat keystore set ETHERSCAN_API_KEY
-```
-
-Private keys must never be printed, shared, or committed to version control.
-
-## 4. Document Hashing
-
-### 4.1 Rules
-
-- Hash the **exact raw certificate bytes** using SHA-256.
-- The output must be 32 bytes, represented as `0x` followed by 64 hexadecimal characters.
-- Pass that digest directly as Solidity `bytes32` to contract functions.
-
-### 4.2 Prohibited Practices
-
-| Incorrect Practice | Why It Fails |
-|---|---|
-| Uploading the document to the contract | Violates privacy; contract stores only hashes |
-| Hashing a filename instead of content | Filename is not the document |
-| Using a JSON string as input | Only valid if it is the agreed canonical representation |
-| Using Keccak-256 instead of SHA-256 | Produces different hashes; breaks interoperability |
-
-### 4.3 Example (Node.js)
-
-```javascript
-const { createHash } = require("crypto");
-
-function hashDocument(buffer) {
-  return "0x" + createHash("sha256").update(buffer).digest("hex");
-}
-```
-
-## 5. Issuance Flow
-
-```
-Step 1: Receive raw certificate bytes
-        |
-Step 2: Compute SHA-256 hash -> documentHash (bytes32)
-        |
-Step 3: Validate hash format (0x + 64 hex chars, non-zero)
-        |
-Step 4: Call issueCertificate(documentHash) via ethers v6 signer
-        |
-Step 5: Wait for transaction receipt (confirmations >= 1)
-        |
-Step 6: Verify on-chain status is ACTIVE via verifyCertificate()
-```
-
-### 5.1 Contract Preconditions
-
-| Check | Error |
-|---|---|
-| Signer has `ISSUER_ROLE` | `IssuerNotAuthorized` |
-| `documentHash != bytes32(0)` | `InvalidDocumentHash` |
-| Hash not already registered | `CertificateAlreadyExists` |
-
-### 5.2 On-Chain State After Issuance
-
-```
-Certificate {
-  issuer:     <signer address>,
-  issuedAt:   <block.timestamp>,
-  revokedAt:  0,
-  status:     ACTIVE (1)
-}
-```
-
-### 5.3 Emitted Event
-
-```
-CertificateIssued(bytes32 indexed documentHash, address indexed issuer, uint64 issuedAt)
-```
-
-## 6. Verification Flow
-
-```
-Step 1: Receive raw certificate bytes (or known hash)
-        |
-Step 2: Compute or use existing SHA-256 hash -> documentHash
-        |
-Step 3: Call verifyCertificate(documentHash) -> CertificateStatus
-        |
-Step 4: If ACTIVE, optionally call getCertificate(documentHash) for full record
-        |
-Step 5: Return status to caller
-```
-
-### 6.1 Verification Status Values
-
-| Value | Name | Meaning |
-|---:|---|---|
-| `0` | `NOT_FOUND` | Hash has never been issued on-chain |
-| `1` | `ACTIVE` | Certificate was issued and has not been revoked |
-| `2` | `REVOKED` | Certificate was permanently revoked |
-
-### 6.2 getCertificate Response
-
-```solidity
-struct Certificate {
-  address issuer;      // Address that issued the certificate
-  uint64  issuedAt;    // Block timestamp of issuance (unix seconds)
-  uint64  revokedAt;   // Block timestamp of revocation (0 if active)
-  CertificateStatus status;  // NOT_FOUND, ACTIVE, or REVOKED
-}
-```
-
-## 7. Revocation Flow
-
-```
-Step 1: Identify the documentHash to revoke
-        |
-Step 2: Call revokeCertificate(documentHash) via ethers v6 signer
-        |
-Step 3: Wait for transaction receipt
-        |
-Step 4: Verify on-chain status is REVOKED
-```
-
-### 7.1 Authorization Rules
-
-| Caller | May Revoke |
-|---|---|
-| Original issuer of the certificate | Yes |
-| Administrator (`ADMIN_ROLE`) | Yes |
-| Any other address | No (`UnauthorizedRevoker`) |
-
-### 7.2 Contract Preconditions
-
-| Check | Error |
-|---|---|
-| Certificate exists (status != NOT_FOUND) | `CertificateNotFound` |
-| Certificate not already revoked | `CertificateAlreadyRevoked` |
-| Caller is original issuer or admin | `UnauthorizedRevoker` |
-
-### 7.3 Emitted Event
-
-```
-CertificateRevoked(bytes32 indexed documentHash, address indexed issuer, address indexed revokedBy, uint64 revokedAt)
-```
-
-## 8. Issuer Identity and Authorization
-
-### 8.1 Identity Model
-
-The prototype uses Ethereum addresses as issuer identities. The deployer receives `ADMIN_ROLE` upon contract construction. Issuers are authorized by the administrator through `authorizeIssuer()`.
-
-### 8.2 Role Hierarchy
-
-```
-ADMIN_ROLE
-    |
-    +-- authorizeIssuer(address)
-    +-- removeIssuer(address)
-    +-- revokeCertificate(bytes32)  [any certificate]
-    |
-ISSUER_ROLE (managed by ADMIN_ROLE)
-    |
-    +-- issueCertificate(bytes32)
-    +-- revokeCertificate(bytes32)  [own certificates only]
-```
-
-### 8.3 Sepolia Deployed Roles
-
-| Role | Address |
-|---|---|
-| Administrator (deployer) | `0x3537d004295AF62098e63DCF6bB8A7c6dAaCB447` |
-| Authorized issuer | `0x4e02876F9bfd58f9D2D542F9520055BeD3addd28` |
-
-### 8.4 Design Constraints
-
-- Inherited `grantRole`, `revokeRole`, and `renounceRole` are disabled.
-- Only `authorizeIssuer()` and `removeIssuer()` manage issuer membership.
-- Removing an issuer blocks future issuance but does not revoke existing certificates.
-
-## 9. Blockchain Adapter (ethers v6)
-
-### 9.1 Provider Setup
-
-```javascript
-const { JsonRpcProvider } = require("ethers");
-const provider = new JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
-```
-
-### 9.2 Signer Setup
-
-```javascript
-const { Wallet } = require("ethers");
-const signer = new Wallet(process.env.ISSUER_PRIVATE_KEY, provider);
-```
-
-### 9.3 Contract Instance
-
-```javascript
-const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-```
-
-### 9.4 Transaction Lifecycle
-
-1. Call the contract write function (returns `TransactionResponse`).
-2. Wait for confirmation: `await tx.wait(1)`.
-3. Check `receipt.status === 1` for success.
-4. Parse events from `receipt.logs` if needed.
-
-### 9.5 Read Operations
-
-Read operations (`verifyCertificate`, `getCertificate`, `isAuthorizedIssuer`) do not require a signer and can use a read-only provider:
-
-```javascript
-const readContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
-const status = await readContract.verifyCertificate(documentHash);
-```
-
-## 10. Security Model
-
-### 10.1 Privacy Boundary
-
-| Stored On-Chain | Never Stored On-Chain |
-|---|---|
-| SHA-256 document hash | Raw certificate file |
-| Issuer address | Citizen identity or PII |
-| Issuance timestamp | Contact details or marks |
-| Revocation timestamp | Detailed revocation reasons |
-| Certificate status | Certificate contents |
-
-### 10.2 Key Management
-
-| Rule | Detail |
-|---|---|
-| Private keys server-side only | Never embed in frontend or client code |
-| No key sharing | Each issuer controls its own key |
-| No real assets on dev keys | Hardhat test addresses are temporary |
-| Use keystore in development | `npx hardhat keystore set` over plain `.env` |
-
-### 10.3 Contract Security
-
-- Non-upgradeable; no proxy pattern.
-- No external calls to untrusted contracts.
-- OpenZeppelin `AccessControl` for role enforcement.
-- Block timestamps are blockchain metadata, not precise wall-clock time.
-
-## 11. Error Reference
-
-### 11.1 Contract Errors
-
-| Error | Trigger |
-|---|---|
-| `InvalidIssuerAddress` | Zero address passed to `authorizeIssuer` or `removeIssuer` |
-| `IssuerAlreadyAuthorized` | Issuer already has `ISSUER_ROLE` |
-| `IssuerNotAuthorized` | Issuer lacks `ISSUER_ROLE` |
-| `InvalidDocumentHash` | Zero `bytes32` passed to `issueCertificate` |
-| `CertificateAlreadyExists` | Hash already registered on-chain |
-| `CertificateNotFound` | Hash not registered when revocation attempted |
-| `CertificateAlreadyRevoked` | Hash already revoked |
-| `UnauthorizedRevoker` | Caller is not the original issuer or admin |
-| `DirectRoleManagementDisabled` | Direct `grantRole`/`revokeRole`/`renounceRole` call |
-
-## 12. Testing
-
-### 12.1 Local Test Suite
-
-```bash
-npm test
-```
-
-Covers all contract functions, authorization rules, error conditions, and event emissions.
-
-### 12.2 Local Demonstration
-
-```bash
-npm run local:demo
-```
-
-Deploys a fresh contract and runs the full lifecycle: authorize issuer, hash document, issue certificate, verify ACTIVE, revoke, verify REVOKED.
-
-### 12.3 Coverage
-
-```bash
-npm run coverage
-```
-
-Generates Solidity line, branch, and function coverage reports.
-
-## 13. Deferred and Future Features
-
-### 13.1 Deferred (Not Implemented)
-
-| Feature | Purpose |
-|---|---|
-| HSM integration | Hardware security module for key custody |
-| Cloud KMS | Managed key signing (AWS KMS, GCP Cloud KMS, Azure Key Vault) |
-| PKI | X.509 certificate chain for issuer identity |
-| Holder binding | Cryptographic proof linking certificate to a citizen wallet |
-| Zero-knowledge proofs | Privacy-preserving verification without revealing certificate contents |
-
-### 13.2 Production Enhancements
-
-- Replace environment-based signing with HSM/KMS.
-- Implement PKI for issuer identity attestation.
-- Add holder binding for citizen wallet ownership proof.
-- Enable multisignature control for administrative operations.
-- Add monitoring, alerting, and audit logging.
-- Consider upgradeability patterns if needed post-deployment.
-
-## 14. Contract Reference
+| --- | --- |
+| `__frontend/` | Hash exact local file bytes with browser SHA-256; validate direct hash input; request wallet signatures |
+| `app-backend/` | Generate and verify SIWE messages; protect private records; validate browser-submitted transaction receipts |
+| `backend/` | Validate hashes, perform public contract reads, build the confirmed event index, and optionally support server-side issuer writes |
+| `PramaanChain` | Enforce issuer authorization, unique issuance, permanent revocation, and public status |
+
+Raw certificate bytes remain in the user's browser. Neither backend receives
+or stores the file. Only a `0x`-prefixed 32-byte SHA-256 digest crosses the
+blockchain boundary.
+
+## 2. Network identity
 
 | Item | Value |
-|---|---|
+| --- | --- |
 | Network | Ethereum Sepolia |
 | Chain ID | `11155111` |
-| Contract address | `0x0bb21729BBDaBe54A289A1e924941F8F635Cab84` |
-| Solidity version | `0.8.28` |
-| License | MIT |
-| Source verified | [Etherscan](https://sepolia.etherscan.io/address/0x0bb21729BBDaBe54A289A1e924941F8F635Cab84#code) |
+| Contract | `0x0bb21729BBDaBe54A289A1e924941F8F635Cab84` |
+| Solidity | `0.8.28` |
+| Source | [Verified on Etherscan](https://sepolia.etherscan.io/address/0x0bb21729BBDaBe54A289A1e924941F8F635Cab84#code) |
 
-## 15. Related Documentation
+## 3. Document hashing
 
-| Document | Purpose |
-|---|---|
-| `CONTRACT_DESIGN.md` | Detailed contract specification and state transitions |
-| `BACKEND_HANDOFF.md` | Backend integration reference |
-| `BACKEND_API.md` | API endpoint configuration and security rules |
-| `BACKEND_SAMPLES.md` | API request and response examples |
-| `SEPOLIA_DEPLOYMENT.md` | Deployment evidence and transaction records |
-| `SEPOLIA_PREPARATION.md` | Network and secret preparation guide |
-| `STAGE8_DEMONSTRATION.md` | Local execution evidence |
-| `STAGE9_VALIDATION.md` | Clean-install validation evidence |
-| `STAGE10_VALIDATION.md` | Stage 10 local validation evidence |
-| `FRONTEND_INTEGRATION.md` | Frontend integration reference |
+The interoperable document identifier is:
+
+```text
+0x + lowercase hexadecimal SHA-256(exact raw document bytes)
+```
+
+The result is 32 bytes and maps directly to Solidity `bytes32`.
+
+Correct browser implementation:
+
+```js
+export async function hashDocument(file) {
+  const bytes = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const hex = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+  return `0x${hex}`;
+}
+```
+
+A direct verifier may instead supply a previously calculated digest matching:
+
+```js
+/^0x[0-9a-fA-F]{64}$/
+```
+
+Do not hash a file name, path, Base64 encoding, UI metadata, or
+`JSON.stringify(file)`. Do not substitute Ethereum Keccak-256. Issuance and
+verification succeed only when they hash identical bytes with the same
+algorithm.
+
+The contract validates byte length and rejects the all-zero value for
+issuance, but it cannot prove that a supplied `bytes32` was produced by
+SHA-256. That is an off-chain interoperability rule.
+
+## 4. Issuance
+
+1. The issuer selects the certificate locally.
+2. The browser computes its SHA-256 digest.
+3. The private backend atomically reserves the request and exact hash.
+4. The injected authorized issuer wallet signs
+   `issueCertificate(documentHash)`.
+5. The private backend validates the contract, sender, successful receipt,
+   `CertificateIssued` event, exact hash, and final `ACTIVE` state.
+6. The encrypted database assigns the public proof to the intended citizen.
+
+Contract preconditions:
+
+| Check | Contract error |
+| --- | --- |
+| Caller has `ISSUER_ROLE` | OpenZeppelin unauthorized-account error |
+| Hash is not zero | `InvalidDocumentHash` |
+| Hash has never been issued | `CertificateAlreadyExists` |
+
+## 5. Verification
+
+Public verification needs no wallet, signature, or gas:
+
+1. Hash the exact file locally or enter a valid existing digest.
+2. Call `verifyCertificate(documentHash)` through
+   `GET /api/verify/:documentHash`.
+3. Read `getCertificate(documentHash)` when issuer and timestamps are needed.
+
+| ABI value | Status | Meaning |
+| ---: | --- | --- |
+| `0` | `NOT_FOUND` | The exact hash has never been issued |
+| `1` | `ACTIVE` | Issued and not revoked |
+| `2` | `REVOKED` | Permanently revoked |
+
+Verification of the public hash does not prove who possesses the original
+document or who is entitled to it. Citizen assignment exists only in the
+encrypted application database.
+
+## 6. Revocation
+
+The original issuer or contract administrator may revoke a certificate
+on-chain. The current issuer portal supports the original-issuer path:
+
+1. Recheck institution membership and current issuer authorization.
+2. Require the connected wallet to equal the immutable original issuer.
+3. Sign `revokeCertificate(documentHash)` in the injected wallet.
+4. Validate the receipt, event, and final `REVOKED` state independently.
+
+Revocation is permanent. A revoked hash cannot be reissued. The current UI
+does not expose administrator emergency revocation.
+
+## 7. Signer and secret boundaries
+
+- Browser transactions use an injected wallet. The application never receives
+  its private key or seed phrase.
+- The gateway can operate read-only with no signer. Its optional server-side
+  writes require a separate test-only `ISSUER_PRIVATE_KEY` and
+  `WRITE_API_KEY`; the frontend never receives either.
+- The administrator private key is never loaded into a backend. Admin
+  authorization is signed in the administrator's browser wallet.
+- `SEPOLIA_RPC_URL`, private keys, API keys, and the application data
+  encryption key must never be committed or placed in `VITE_*` variables.
+- Hardhat keystore variables are for approved deployment tooling, not normal
+  frontend operation.
+
+## 8. Privacy boundary
+
+| Public on-chain data | Never placed on-chain |
+| --- | --- |
+| SHA-256 document hash | Certificate file or contents |
+| Issuer address | Citizen name or identifier |
+| Issuance and revocation timestamps | Contact details, marks, or address |
+| `ACTIVE` or `REVOKED` status | Detailed revocation reason |
+
+A document hash is a stable fingerprint, not encryption. Predictable source
+documents may be susceptible to guessing, so original files still require
+appropriate off-chain protection.
+
+## 9. Deferred production work
+
+The current prototype does not include HSM/KMS signing, production
+multisignature administration, issuer PKI, on-chain holder binding, wallet
+recovery, production deployment, monitoring, or zero-knowledge proofs. These
+require separate design and explicit authorization.
+
+For the contract interface see
+[`CONTRACT_DESIGN.md`](CONTRACT_DESIGN.md). For gateway behavior see
+[`BACKEND_API.md`](BACKEND_API.md). For the implemented private and browser
+flow see [`FRONTEND_APPLICATION.md`](FRONTEND_APPLICATION.md) and
+[`FRONTEND_INTEGRATION.md`](FRONTEND_INTEGRATION.md).

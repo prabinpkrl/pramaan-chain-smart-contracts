@@ -1,5 +1,11 @@
 # PramaanChain Backend Handoff
 
+> Current status: the handoff has been implemented in the `backend/` gateway.
+> Use [`BACKEND_API.md`](BACKEND_API.md) for its current routes and
+> [`FRONTEND_APPLICATION.md`](FRONTEND_APPLICATION.md) for the separate SIWE
+> and private relationship service. This document remains the contract
+> integration reference.
+
 ## 1. Scope
 
 This document gives the backend developer the information and requirements
@@ -546,7 +552,9 @@ prototype blockchain gateway. It intentionally does not contain:
 - citizen/institution accounts, database-backed relationships, sessions, or
   a durable shared transaction queue;
 - frontend applications or QR-code generation and scanning;
-- citizen registration, authentication, wallet, delivery, or ownership proof;
+- citizen registration, authentication, wallet integration, delivery, or
+  ownership proof inside this gateway; SIWE and private relationships are
+  implemented separately in `app-backend/`;
 - certificate/document storage or detailed revocation reasons;
 - production KMS, HSM, Vault, monitoring, governance, administrator recovery,
   or multisignature control;
@@ -562,8 +570,9 @@ The prototype gateway's ethers `NonceManager` handles only Ethereum
 transaction ordering for the configured issuer signer. Its persistent
 single-process `Idempotency-Key` journal prevents accidental repeated
 issue/revoke submissions. Neither feature implements citizen authentication.
-Citizen login still requires separate nonce-challenge generation, wallet
-signature verification, session handling, and frontend wallet integration.
+Citizen login uses separate nonce-challenge generation, wallet signature
+verification, session handling, and frontend wallet integration in
+`app-backend/` and `__frontend/`.
 
 `TRUST_PROXY` is optional deployment configuration, not a frontend
 requirement. Keep it `false` for direct/local use and configure an exact trusted
@@ -572,8 +581,11 @@ proxy.
 
 ## 15. Integration acceptance checklist
 
-The blockchain/backend integration is ready for the fellowship Sepolia
-prototype only when all applicable items are demonstrated:
+This is the reusable contract-to-gateway acceptance checklist retained from
+the handoff. Unchecked boxes are criteria, not a statement that the current
+automated gateway implementation is missing. A new deployment or operator
+must demonstrate every applicable item without sending a public-network write
+unless that write is separately approved.
 
 - [ ] The backend uses chain ID `11155111`, contract address
   `0x0bb21729BBDaBe54A289A1e924941F8F635Cab84`, and ABI from reviewed commit

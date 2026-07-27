@@ -38,6 +38,19 @@ artifacts/contracts/PramaanChain.sol/PramaanChain.json
 The ABI is the `abi` property of that JSON file. `artifacts/` is generated and
 ignored by Git, so compile before attempting to load it.
 
+The repository contains four independently tested components:
+
+| Component | Test suite |
+| --- | ---: |
+| Solidity contract | 45 tests |
+| Public blockchain gateway | 28 tests |
+| Private application backend | 8 tests |
+| React frontend | 16 tests |
+
+See [`docs/README.md`](docs/README.md) for the complete documentation index and
+the distinction between current operating guides and historical completion
+evidence.
+
 ## Commands
 
 | Command | Purpose |
@@ -274,8 +287,11 @@ __frontend/                      Public, issuer, and citizen React portal
 scripts/deploy.js                Local deployment-only script
 scripts/demo.js                  Checked local or Sepolia lifecycle demonstration
 docs/CONTRACT_DESIGN.md          Detailed contract specification
-docs/BACKEND_HANDOFF.md          Later-integration reference
+docs/README.md                   Documentation index and status guide
+docs/BACKEND_API.md              Public gateway API and configuration
+docs/BACKEND_HANDOFF.md          Contract-to-gateway integration reference
 docs/FRONTEND_APPLICATION.md     Prototype application integration guide
+docs/FRONTEND_INTEGRATION.md     Implemented browser and wallet flows
 docs/STAGE8_DEMONSTRATION.md     Captured local execution evidence
 docs/STAGE9_VALIDATION.md        Clean-install and handoff validation evidence
 docs/SEPOLIA_PREPARATION.md      Stage 10 network and secret preparation

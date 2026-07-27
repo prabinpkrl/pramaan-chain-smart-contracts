@@ -13,6 +13,7 @@ npm ci
 cp .env.example .env
 npm run lint
 npm test
+npm run build
 npm run dev
 ```
 
@@ -65,4 +66,6 @@ already know that chain.
 | `npm run preview` | Preview the built bundle |
 
 For complete startup, security, workflow, and API details, see
-[`../docs/FRONTEND_APPLICATION.md`](../docs/FRONTEND_APPLICATION.md).
+[`../docs/FRONTEND_APPLICATION.md`](../docs/FRONTEND_APPLICATION.md). The
+implemented route and service integration is documented in
+[`../docs/FRONTEND_INTEGRATION.md`](../docs/FRONTEND_INTEGRATION.md).
