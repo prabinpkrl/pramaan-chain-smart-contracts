@@ -30,8 +30,9 @@ Multi-role wallets can switch portals from the header.
 
 ## Trust boundaries
 
-- Public verification requires no wallet. The file is SHA-256 hashed locally
-  and only its `bytes32` digest is queried.
+- Public verification requires no wallet. A verifier can paste a
+  `0x`-prefixed 32-byte SHA-256 hash or select the original file to hash
+  locally; only the resulting `bytes32` digest is queried.
 - Citizen relationships, requests, and certificate assignments come from the
   encrypted private application backend.
 - Issuers prepare a request in the private backend, sign the exact hash with

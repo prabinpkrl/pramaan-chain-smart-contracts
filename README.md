@@ -217,7 +217,7 @@ is deployed behind a known reverse proxy.
 The explicitly approved prototype application is implemented in
 `app-backend/` and `__frontend/`. It adds:
 
-- public browser-side file hashing and Sepolia verification;
+- public browser-side file hashing or direct hash input and Sepolia verification;
 - wallet authentication through standard SIWE messages;
 - backend-derived administrator, issuer, citizen, and unlinked capabilities;
 - AES-256-GCM encrypted citizen, institution, request, and certificate

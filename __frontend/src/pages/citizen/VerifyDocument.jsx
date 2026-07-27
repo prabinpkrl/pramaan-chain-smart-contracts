@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { CheckCircle2, XCircle } from "lucide-react";
 
@@ -15,6 +15,8 @@ const ACCEPTED_TYPES = ".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.csv,.xlsx,.zip";
 
 function VerifyDocument() {
   const { documentHash: routeHash } = useParams();
+  const navigate = useNavigate();
+  const [hashInput, setHashInput] = useState(routeHash || "");
   const [selectedFile, setSelectedFile] = useState(null);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(
@@ -80,6 +82,21 @@ function VerifyDocument() {
     await verifyHash(await hashDocument(selectedFile), selectedFile.name);
   };
 
+  const handleVerifyHash = async (event) => {
+    event.preventDefault();
+    const documentHash = hashInput.trim();
+    if (!isValidDocumentHash(documentHash)) {
+      toast.error("Enter a 0x-prefixed 32-byte document hash.");
+      return;
+    }
+    setResult(null);
+    if (routeHash?.toLowerCase() === documentHash.toLowerCase()) {
+      await verifyHash(documentHash, "Entered hash");
+      return;
+    }
+    navigate(`/verify/${documentHash}`);
+  };
+
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="flex items-center justify-between border-b bg-white px-6 py-4">
@@ -91,34 +108,59 @@ function VerifyDocument() {
       <main className="mx-auto max-w-4xl p-6">
         <h1 className="mb-2 text-3xl font-bold">Public Certificate Verifier</h1>
         <p className="mb-6 text-gray-600">
-          No wallet or login is required. Files are hashed in your browser and
-          are never uploaded.
+          No wallet or login is required. Enter an existing SHA-256 hash, or
+          select a file to hash locally. Files are never uploaded.
         </p>
 
         <div className="rounded-xl bg-white p-8 shadow">
-          {!routeHash && (
-            <>
-              <label htmlFor="verificationFile" className="mb-2 block text-sm font-medium">
-                Upload document
-              </label>
-              <input
-                id="verificationFile"
-                type="file"
-                accept={ACCEPTED_TYPES}
-                onChange={(event) => {
-                  setSelectedFile(event.target.files[0] || null);
-                  setResult(null);
-                }}
-                className="block w-full rounded-lg border border-gray-300 p-3"
-              />
-              <p className="mb-4 mt-2 text-xs text-gray-500">
-                {selectedFile
-                  ? `${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)`
-                  : "Select the original file to calculate its SHA-256 digest."}
-              </p>
-              <Button onClick={handleVerifyFile} loading={loading}>Verify document</Button>
-            </>
-          )}
+          <form onSubmit={handleVerifyHash}>
+            <label htmlFor="verificationHash" className="mb-2 block text-sm font-medium">
+              Document hash
+            </label>
+            <input
+              id="verificationHash"
+              type="text"
+              value={hashInput}
+              onChange={(event) => {
+                setHashInput(event.target.value);
+                setResult(null);
+              }}
+              placeholder="0x followed by 64 hexadecimal characters"
+              spellCheck="false"
+              autoComplete="off"
+              className="block w-full rounded-lg border border-gray-300 p-3 font-mono text-sm"
+            />
+            <p className="mb-4 mt-2 text-xs text-gray-500">
+              Paste the exact 32-byte SHA-256 digest recorded on PramaanChain.
+            </p>
+            <Button type="submit" loading={loading}>Verify hash</Button>
+          </form>
+
+          <div className="my-8 flex items-center gap-4 text-sm text-gray-400">
+            <span className="h-px flex-1 bg-gray-200" />
+            OR VERIFY THE ORIGINAL FILE
+            <span className="h-px flex-1 bg-gray-200" />
+          </div>
+
+          <label htmlFor="verificationFile" className="mb-2 block text-sm font-medium">
+            Upload document
+          </label>
+          <input
+            id="verificationFile"
+            type="file"
+            accept={ACCEPTED_TYPES}
+            onChange={(event) => {
+              setSelectedFile(event.target.files[0] || null);
+              setResult(null);
+            }}
+            className="block w-full rounded-lg border border-gray-300 p-3"
+          />
+          <p className="mb-4 mt-2 text-xs text-gray-500">
+            {selectedFile
+              ? `${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)`
+              : "Select the original file to calculate its SHA-256 digest locally."}
+          </p>
+          <Button onClick={handleVerifyFile} loading={loading}>Verify document</Button>
 
           {routeHash && loading && (
             <p className="text-gray-600">Checking the shared certificate hash…</p>

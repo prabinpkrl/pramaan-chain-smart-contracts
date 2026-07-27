@@ -19,6 +19,10 @@ separate components.
 Certificate files are hashed in the browser and are never uploaded. Only the
 SHA-256 digest is sent to the contract.
 
+The public verifier also accepts an already calculated, `0x`-prefixed
+32-byte SHA-256 digest. It validates the format locally and performs the same
+read-only blockchain lookup as file-based verification.
+
 ## Components and ports
 
 | Component | Default URL | Responsibility |
