@@ -18,7 +18,7 @@ import { useAuth } from "../../context/useAuth";
 const NAV_ITEMS = {
   ADMIN: [
     { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/admin/issuers", label: "Manage Issuers", icon: Users },
+    { to: "/admin/issuers", label: "Institutions", icon: Users },
     { to: "/admin/monitor", label: "Blockchain Monitor", icon: Activity },
     { to: "/admin/audit-logs", label: "Audit Logs", icon: ScrollText },
   ],
@@ -31,13 +31,14 @@ const NAV_ITEMS = {
   ],
   CITIZEN: [
     { to: "/citizen/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/citizen/connect", label: "Connect Institution", icon: Users },
     { to: "/citizen/requests", label: "Certificate Requests", icon: FilePlus2 },
     { to: "/citizen/my-documents", label: "My Documents", icon: FolderClock },
     { to: "/verify", label: "Public Verifier", icon: ShieldCheck },
     { to: "/citizen/history", label: "Verification History", icon: History },
   ],
   UNLINKED: [
-    { to: "/citizen/claim", label: "Claim Institution", icon: ShieldCheck },
+    { to: "/citizen/connect", label: "Connect Institution", icon: Users },
   ],
 };
 

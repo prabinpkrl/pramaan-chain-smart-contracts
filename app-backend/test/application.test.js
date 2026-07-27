@@ -105,9 +105,9 @@ describe("PramaanChain application backend", () => {
     chain = new MockChain();
     issuer = Wallet.createRandom();
     citizen = Wallet.createRandom();
-    institution = db.seedInstitution({
+    institution = db.createInstitution({
       name: "Synthetic University",
-      slug: "synthetic-university",
+      publicId: "SYNTHETIC-UNIVERSITY",
       issuerAddress: issuer.address,
     });
     chain.issuers.add(issuer.address.toLowerCase());
@@ -120,7 +120,6 @@ describe("PramaanChain application backend", () => {
         chainId: 11155111,
         nonceTtlMs: 5 * 60 * 1000,
         sessionTtlMs: 8 * 60 * 60 * 1000,
-        claimTtlMs: 24 * 60 * 60 * 1000,
         cookieSecure: false,
       },
     });
@@ -170,48 +169,150 @@ describe("PramaanChain application backend", () => {
     assert.equal(blocked.body.error.code, "ROLE_REQUIRED");
   });
 
-  it("claims a 128-bit code once and derives citizen authorization", async () => {
-    const issuerAgent = request.agent(app);
-    const issuerSession = await login(issuerAgent, issuer);
-    const created = await issuerAgent
-      .post("/api/issuer/claim-codes")
-      .set("x-csrf-token", issuerSession.csrfToken)
-      .send({
-        institutionId: institution.id,
-        recipientReference: "SYNTHETIC-REQUEST-001",
-      })
-      .expect(201);
-    assert.ok(Buffer.from(created.body.code, "base64url").length >= 16);
-
+  it("connects citizens by public institution ID without approval", async () => {
     const citizenAgent = request.agent(app);
     const citizenSession = await login(citizenAgent, citizen);
     assert.deepEqual(citizenSession.roles, ["UNLINKED"]);
-    const claimed = await citizenAgent
-      .post("/api/citizen/claim-codes/claim")
+    const connected = await citizenAgent
+      .post("/api/citizen/institutions/connect")
       .set("x-csrf-token", citizenSession.csrfToken)
-      .send({ code: created.body.code })
+      .send({ publicId: "synthetic-university" })
+      .expect(201);
+    assert.equal(connected.body.institution.publicId, "SYNTHETIC-UNIVERSITY");
+    assert.ok(connected.body.authorization.roles.includes("CITIZEN"));
+
+    const repeated = await citizenAgent
+      .post("/api/citizen/institutions/connect")
+      .set("x-csrf-token", citizenSession.csrfToken)
+      .send({ publicId: "SYNTHETIC-UNIVERSITY" })
       .expect(200);
-    assert.ok(claimed.body.authorization.roles.includes("CITIZEN"));
+    assert.equal(repeated.body.connected, false);
 
     const secondWallet = Wallet.createRandom();
     const secondAgent = request.agent(app);
     const secondSession = await login(secondAgent, secondWallet);
-    const reused = await secondAgent
-      .post("/api/citizen/claim-codes/claim")
+    await secondAgent
+      .post("/api/citizen/institutions/connect")
       .set("x-csrf-token", secondSession.csrfToken)
-      .send({ code: created.body.code })
+      .send({ publicId: "SYNTHETIC-UNIVERSITY" })
+      .expect(201);
+
+    const secondIssuer = Wallet.createRandom();
+    const secondInstitution = db.createInstitution({
+      name: "Second Institution",
+      publicId: "SECOND-INSTITUTION",
+      issuerAddress: secondIssuer.address,
+    });
+    chain.issuers.add(secondIssuer.address.toLowerCase());
+    await citizenAgent
+      .post("/api/citizen/institutions/connect")
+      .set("x-csrf-token", citizenSession.csrfToken)
+      .send({ publicId: secondInstitution.publicId })
+      .expect(201);
+    assert.equal(db.getCitizenRelationships(citizen.address).length, 2);
+
+    const missing = await citizenAgent
+      .post("/api/citizen/institutions/connect")
+      .set("x-csrf-token", citizenSession.csrfToken)
+      .send({ publicId: "MISSING-INSTITUTION" })
+      .expect(404);
+    assert.equal(missing.body.error.code, "INSTITUTION_NOT_FOUND");
+
+    const malformed = await citizenAgent
+      .post("/api/citizen/institutions/connect")
+      .set("x-csrf-token", citizenSession.csrfToken)
+      .send({ publicId: "not valid!" })
+      .expect(400);
+    assert.equal(malformed.body.error.code, "INVALID_PUBLIC_ID");
+
+    chain.issuers.delete(secondIssuer.address.toLowerCase());
+    const inactive = await citizenAgent
+      .post("/api/citizen/institutions/connect")
+      .set("x-csrf-token", citizenSession.csrfToken)
+      .send({ publicId: secondInstitution.publicId })
       .expect(403);
-    assert.equal(reused.body.error.code, "INVALID_CLAIM_CODE");
+    assert.equal(inactive.body.error.code, "INSTITUTION_ISSUER_INACTIVE");
+
+    await citizenAgent
+      .post("/api/citizen/claim-codes/claim")
+      .set("x-csrf-token", citizenSession.csrfToken)
+      .send({ code: "removed" })
+      .expect(404);
+  });
+
+  it("lets an administrator register an authorized institution", async () => {
+    chain.admins.add(issuer.address.toLowerCase());
+    const newIssuer = Wallet.createRandom();
+    chain.issuers.add(newIssuer.address.toLowerCase());
+    const adminAgent = request.agent(app);
+    const adminSession = await login(adminAgent, issuer);
+
+    const created = await adminAgent
+      .post("/api/admin/institutions")
+      .set("x-csrf-token", adminSession.csrfToken)
+      .send({
+        publicId: "tu-nepal",
+        name: "Tribhuvan University",
+        issuerAddress: newIssuer.address,
+      })
+      .expect(201);
+    assert.equal(created.body.publicId, "TU-NEPAL");
+
+    const listed = await adminAgent
+      .get("/api/admin/institutions")
+      .expect(200);
+    assert.ok(listed.body.institutions.some((item) => (
+      item.publicId === "TU-NEPAL" && item.authorized
+    )));
+
+    await adminAgent
+      .post("/api/admin/institutions")
+      .set("x-csrf-token", adminSession.csrfToken)
+      .send({
+        publicId: "TU-NEPAL",
+        name: "Duplicate",
+        issuerAddress: newIssuer.address,
+      })
+      .expect(409);
+
+    const duplicateWallet = await adminAgent
+      .post("/api/admin/institutions")
+      .set("x-csrf-token", adminSession.csrfToken)
+      .send({
+        publicId: "ANOTHER-PUBLIC-ID",
+        name: "Duplicate Issuer Institution",
+        issuerAddress: newIssuer.address,
+      })
+      .expect(409);
+    assert.equal(duplicateWallet.body.error.code, "ISSUER_ALREADY_REGISTERED");
+
+    const unauthorizedIssuer = Wallet.createRandom();
+    const rejected = await adminAgent
+      .post("/api/admin/institutions")
+      .set("x-csrf-token", adminSession.csrfToken)
+      .send({
+        publicId: "UNAUTHORIZED-INSTITUTION",
+        name: "Unauthorized Institution",
+        issuerAddress: unauthorizedIssuer.address,
+      })
+      .expect(403);
+    assert.equal(rejected.body.error.code, "ISSUER_NOT_AUTHORIZED");
+
+    const citizenAgent = request.agent(app);
+    const citizenSession = await login(citizenAgent, citizen);
+    await citizenAgent
+      .post("/api/admin/institutions")
+      .set("x-csrf-token", citizenSession.csrfToken)
+      .send({
+        publicId: "CITIZEN-CANNOT-CREATE",
+        name: "Denied Institution",
+        issuerAddress: newIssuer.address,
+      })
+      .expect(403);
   });
 
   it("atomically freezes one hash while issuance is processing", async () => {
-    const claim = db.createClaimCode({
-      institutionId: institution.id,
-      issuerAddress: issuer.address,
-      recipientReference: "SYNTHETIC-REQUEST-002",
-      ttlMs: 60_000,
-    });
-    db.claimCode({ code: claim.code, address: citizen.address });
+    db.connectCitizen({ publicId: institution.publicId, address: citizen.address });
     const certificateRequest = db.createRequest({
       address: citizen.address,
       institutionId: institution.id,
@@ -244,13 +345,7 @@ describe("PramaanChain application backend", () => {
   });
 
   it("confirms issuance idempotently and restricts revocation to the original issuer", async () => {
-    const claim = db.createClaimCode({
-      institutionId: institution.id,
-      issuerAddress: issuer.address,
-      recipientReference: "SYNTHETIC-REQUEST-003",
-      ttlMs: 60_000,
-    });
-    db.claimCode({ code: claim.code, address: citizen.address });
+    db.connectCitizen({ publicId: institution.publicId, address: citizen.address });
     const certificateRequest = db.createRequest({
       address: citizen.address,
       institutionId: institution.id,
@@ -286,9 +381,9 @@ describe("PramaanChain application backend", () => {
     assert.equal(repeated.body.id, confirmed.body.id);
 
     const otherIssuer = Wallet.createRandom();
-    db.seedInstitution({
-      name: "Synthetic University",
-      slug: "synthetic-university",
+    const otherInstitution = db.createInstitution({
+      name: "Other University",
+      publicId: "OTHER-UNIVERSITY",
       issuerAddress: otherIssuer.address,
     });
     chain.issuers.add(otherIssuer.address.toLowerCase());
@@ -297,9 +392,9 @@ describe("PramaanChain application backend", () => {
     const denied = await otherAgent
       .post(`/api/issuer/certificates/${confirmed.body.id}/prepare-revocation`)
       .set("x-csrf-token", otherSession.csrfToken)
-      .send({ institutionId: institution.id })
-      .expect(403);
-    assert.equal(denied.body.error.code, "ORIGINAL_ISSUER_REQUIRED");
+      .send({ institutionId: otherInstitution.id })
+      .expect(404);
+    assert.equal(denied.body.error.code, "CERTIFICATE_NOT_FOUND");
 
     const preparedRevocation = await issuerAgent
       .post(`/api/issuer/certificates/${confirmed.body.id}/prepare-revocation`)
@@ -324,32 +419,20 @@ describe("PramaanChain application backend", () => {
     try {
       const fileDb = new AppDatabase(filename, randomBytes(32));
       const wallet = Wallet.createRandom();
-      const seeded = fileDb.seedInstitution({
+      fileDb.createInstitution({
         name: "Public Institution Name",
-        slug: "public-institution",
+        publicId: "PUBLIC-INSTITUTION",
         issuerAddress: wallet.address,
-      });
-      const claim = fileDb.createClaimCode({
-        institutionId: seeded.id,
-        issuerAddress: wallet.address,
-        recipientReference: "PRIVATE-REFERENCE-MUST-BE-ENCRYPTED",
-        ttlMs: 60_000,
       });
       const membership = fileDb.db.prepare(
         "SELECT wallet_enc FROM issuer_memberships LIMIT 1",
       ).get();
       assert.ok(!membership.wallet_enc.includes(wallet.address));
       assert.equal(fileDb.crypto.decrypt(membership.wallet_enc), wallet.address);
-      assert.notEqual(
-        fileDb.db.prepare("SELECT code_hash FROM claim_codes WHERE id = ?").get(claim.id).code_hash,
-        claim.code,
-      );
       fileDb.close();
 
       const rawDatabase = readFileSync(filename).toString("latin1");
       assert.ok(!rawDatabase.includes(wallet.address));
-      assert.ok(!rawDatabase.includes("PRIVATE-REFERENCE-MUST-BE-ENCRYPTED"));
-      assert.ok(!rawDatabase.includes(claim.code));
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

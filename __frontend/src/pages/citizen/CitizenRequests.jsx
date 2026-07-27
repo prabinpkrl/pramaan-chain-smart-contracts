@@ -73,7 +73,7 @@ function CitizenRequests() {
           >
             {institutions.map((institution) => (
               <option key={institution.id} value={institution.id}>
-                {institution.name}
+                {institution.name} ({institution.publicId})
               </option>
             ))}
           </select>

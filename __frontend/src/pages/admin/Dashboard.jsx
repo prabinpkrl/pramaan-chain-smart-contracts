@@ -60,13 +60,13 @@ function Dashboard() {
       </div>
 
       <div className="mb-8 rounded-xl bg-white p-6 shadow">
-        <h2 className="mb-2 text-xl font-semibold">Issuer Administration</h2>
+        <h2 className="mb-2 text-xl font-semibold">Institution Administration</h2>
         <p className="mb-4 text-gray-600">
-          Check an issuer or authorize a new issuer using the connected
-          administrator wallet.
+          Create a public institution ID, authorize its primary issuer wallet,
+          and register the private membership.
         </p>
         <Button onClick={() => navigate("/admin/issuers")}>
-          Check or Authorize Issuer
+          Manage Institutions
         </Button>
       </div>
 

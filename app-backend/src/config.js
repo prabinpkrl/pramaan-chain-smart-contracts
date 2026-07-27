@@ -45,6 +45,5 @@ export function loadConfig(env = process.env) {
     cookieSecure: env.COOKIE_SECURE === "true",
     nonceTtlMs: 5 * 60 * 1000,
     sessionTtlMs: 8 * 60 * 60 * 1000,
-    claimTtlMs: 24 * 60 * 60 * 1000,
   };
 }

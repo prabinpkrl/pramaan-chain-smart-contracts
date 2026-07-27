@@ -46,6 +46,25 @@ function Dashboard() {
         <StatCard title="Active Proofs" value={certificates.filter((item) => item.status === "ACTIVE").length} color="green" />
       </div>
 
+      <div className="mb-8 rounded-xl bg-white p-6 shadow">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h2 className="text-xl font-semibold">Connected Institutions</h2>
+          <Button variant="secondary" onClick={() => navigate("/citizen/connect")}>
+            Connect another
+          </Button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {session.citizenRelationships.map((institution) => (
+            <div key={institution.id} className="rounded-lg border p-4">
+              <p className="font-semibold">{institution.name}</p>
+              <p className="mt-1 font-mono text-sm text-blue-700">
+                {institution.publicId}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl shadow p-6">
         <h2 className="text-xl font-semibold mb-2">Certificate ownership boundary</h2>
         <p className="text-gray-600">

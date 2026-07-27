@@ -34,15 +34,17 @@ Multi-role wallets can switch portals from the header.
   `0x`-prefixed 32-byte SHA-256 hash or select the original file to hash
   locally; only the resulting `bytes32` digest is queried.
 - Citizen relationships, requests, and certificate assignments come from the
-  encrypted private application backend.
+  encrypted private application backend. Citizens connect to one or more
+  institutions using stable public IDs; no approval or shared secret is used.
 - Issuers prepare a request in the private backend, sign the exact hash with
   their injected wallet, and send the transaction hash back for independent
   receipt validation.
 - QR codes contain only `/verify/<documentHash>` public URLs.
 - Issuer authorization is signed directly by the authenticated administrator
   wallet and verified through a read-only chain lookup after confirmation.
-  The administrator key never enters either backend. Issuer removal remains
-  outside this prototype UI.
+  The administrator then registers the institution name, public ID, and
+  primary issuer membership privately. The administrator key never enters
+  either backend. Issuer removal remains outside this prototype UI.
 - The blockchain gateway's optional API-key write endpoints are never called
   by this browser application.
 

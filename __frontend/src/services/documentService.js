@@ -97,16 +97,22 @@ export async function confirmRevocation(
   return response.data;
 }
 
-export async function createClaimCode(institutionId, recipientReference) {
-  const response = await appApi.post("/issuer/claim-codes", {
-    institutionId,
-    recipientReference,
+export async function listAdminInstitutions() {
+  const response = await appApi.get("/admin/institutions");
+  return response.data.institutions;
+}
+
+export async function registerInstitution(publicId, name, issuerAddress) {
+  const response = await appApi.post("/admin/institutions", {
+    publicId,
+    name,
+    issuerAddress,
   });
   return response.data;
 }
 
-export async function claimCode(code) {
-  const response = await appApi.post("/citizen/claim-codes/claim", { code });
+export async function connectInstitution(publicId) {
+  const response = await appApi.post("/citizen/institutions/connect", { publicId });
   return response.data;
 }
 

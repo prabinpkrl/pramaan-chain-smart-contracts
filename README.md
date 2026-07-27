@@ -222,7 +222,7 @@ The explicitly approved prototype application is implemented in
 - backend-derived administrator, issuer, citizen, and unlinked capabilities;
 - AES-256-GCM encrypted citizen, institution, request, and certificate
   assignment fields in SQLite;
-- 128-bit one-time institution claim codes;
+- stable public institution IDs with approval-free citizen connections;
 - atomic `PENDING -> PROCESSING -> ISSUED` request handling;
 - issuer transactions signed directly in an injected browser wallet; and
 - administrator issuer authorization signed directly by the authenticated

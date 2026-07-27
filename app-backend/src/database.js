@@ -35,39 +35,79 @@ export class AppDatabase {
     return this.crypto.blindIndex(this.normalizeWallet(address));
   }
 
-  seedInstitution({ name, slug, issuerAddress }) {
+  createInstitution({ name, publicId, issuerAddress }) {
     const institutionId = randomUUID();
     const membershipId = randomUUID();
     const address = this.normalizeWallet(issuerAddress);
+    const normalizedPublicId = publicId.toUpperCase();
+    const walletHash = this.walletHash(address);
     const timestamp = nowIso();
-    this.db.transaction(() => {
+    return this.db.transaction(() => {
+      if (this.db.prepare("SELECT 1 FROM institutions WHERE public_id = ?").get(normalizedPublicId)) {
+        throw conflict("PUBLIC_ID_ALREADY_EXISTS", "The public institution ID is already registered");
+      }
+      if (this.db.prepare("SELECT 1 FROM issuer_memberships WHERE wallet_hash = ?").get(walletHash)) {
+        throw conflict("ISSUER_ALREADY_REGISTERED", "The issuer wallet already belongs to an institution");
+      }
       this.db.prepare(`
-        INSERT INTO institutions (id, slug, name, created_at)
+        INSERT INTO institutions (id, public_id, name, created_at)
         VALUES (?, ?, ?, ?)
-        ON CONFLICT(slug) DO UPDATE SET name = excluded.name, active = 1
-      `).run(institutionId, slug, name, timestamp);
-      const institution = this.db.prepare("SELECT id FROM institutions WHERE slug = ?").get(slug);
+      `).run(institutionId, normalizedPublicId, name, timestamp);
       this.db.prepare(`
         INSERT INTO issuer_memberships
           (id, institution_id, wallet_hash, wallet_enc, active, created_at)
         VALUES (?, ?, ?, ?, 1, ?)
-        ON CONFLICT(institution_id, wallet_hash) DO UPDATE SET
-          wallet_enc = excluded.wallet_enc,
-          active = 1
       `).run(
         membershipId,
-        institution.id,
-        this.walletHash(address),
+        institutionId,
+        walletHash,
         this.crypto.encrypt(address),
         timestamp,
       );
+      return {
+        id: institutionId,
+        publicId: normalizedPublicId,
+        name,
+        issuerAddress: address,
+        active: true,
+      };
     })();
-    return this.db.prepare("SELECT id, slug, name FROM institutions WHERE slug = ?").get(slug);
+  }
+
+  listInstitutions() {
+    return this.db.prepare(`
+      SELECT i.id, i.public_id, i.name, i.active, m.wallet_enc
+      FROM institutions i
+      JOIN issuer_memberships m ON m.institution_id = i.id AND m.active = 1
+      ORDER BY i.name
+    `).all().map((row) => ({
+      id: row.id,
+      publicId: row.public_id,
+      name: row.name,
+      issuerAddress: this.crypto.decrypt(row.wallet_enc),
+      active: Boolean(row.active),
+    }));
+  }
+
+  getInstitutionByPublicId(publicId) {
+    const row = this.db.prepare(`
+      SELECT i.id, i.public_id, i.name, i.active, m.wallet_enc
+      FROM institutions i
+      JOIN issuer_memberships m ON m.institution_id = i.id AND m.active = 1
+      WHERE i.public_id = ? AND i.active = 1
+    `).get(publicId.toUpperCase());
+    return row ? {
+      id: row.id,
+      publicId: row.public_id,
+      name: row.name,
+      issuerAddress: this.crypto.decrypt(row.wallet_enc),
+      active: true,
+    } : null;
   }
 
   getIssuerMemberships(address) {
     return this.db.prepare(`
-      SELECT i.id, i.slug, i.name
+      SELECT i.id, i.public_id AS publicId, i.name
       FROM issuer_memberships m
       JOIN institutions i ON i.id = m.institution_id
       WHERE m.wallet_hash = ? AND m.active = 1 AND i.active = 1
@@ -82,7 +122,7 @@ export class AppDatabase {
 
   getCitizenRelationships(address) {
     return this.db.prepare(`
-      SELECT i.id, i.slug, i.name
+      SELECT i.id, i.public_id AS publicId, i.name
       FROM citizens c
       JOIN citizen_relationships r ON r.citizen_id = c.id
       JOIN institutions i ON i.id = r.institution_id
@@ -186,35 +226,13 @@ export class AppDatabase {
     ).run(nowIso(), hashSecret(token));
   }
 
-  createClaimCode({ institutionId, issuerAddress, recipientReference, ttlMs }) {
-    const code = randomToken(16);
-    const timestamp = nowIso();
-    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
-    const id = randomUUID();
-    this.db.prepare(`
-      INSERT INTO claim_codes
-        (id, institution_id, code_hash, recipient_reference_enc,
-         created_by_wallet_hash, expires_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      institutionId,
-      hashSecret(code),
-      this.crypto.encrypt(recipientReference),
-      this.walletHash(issuerAddress),
-      expiresAt,
-      timestamp,
-    );
-    return { id, code, expiresAt };
-  }
-
-  claimCode({ code, address }) {
+  connectCitizen({ publicId, address }) {
     return this.db.transaction(() => {
-      const claim = this.db.prepare(
-        "SELECT * FROM claim_codes WHERE code_hash = ?",
-      ).get(hashSecret(code));
-      if (!claim || claim.claimed_at || Date.parse(claim.expires_at) <= Date.now()) {
-        throw forbidden("INVALID_CLAIM_CODE", "The claim code is invalid or unavailable");
+      const institution = this.db.prepare(
+        "SELECT id, public_id, name FROM institutions WHERE public_id = ? AND active = 1",
+      ).get(publicId.toUpperCase());
+      if (!institution) {
+        throw notFound("INSTITUTION_NOT_FOUND", "No active institution uses that public ID");
       }
 
       const normalized = this.normalizeWallet(address);
@@ -229,25 +247,41 @@ export class AppDatabase {
         citizen = this.db.prepare("SELECT * FROM citizens WHERE id = ?").get(citizenId);
       }
 
-      this.db.prepare(`
-        INSERT INTO citizen_relationships
-          (id, citizen_id, institution_id, claim_code_id, active, created_at)
-        VALUES (?, ?, ?, ?, 1, ?)
-        ON CONFLICT(citizen_id, institution_id) DO UPDATE SET active = 1
-      `).run(randomUUID(), citizen.id, claim.institution_id, claim.id, nowIso());
-
-      const result = this.db.prepare(`
-        UPDATE claim_codes SET claimed_at = ?, claimed_by_citizen_id = ?
-        WHERE id = ? AND claimed_at IS NULL
-      `).run(nowIso(), citizen.id, claim.id);
-      if (result.changes !== 1) {
-        throw conflict("CLAIM_CODE_ALREADY_USED", "The claim code is no longer available");
+      const existing = this.db.prepare(`
+        SELECT id, active FROM citizen_relationships
+        WHERE citizen_id = ? AND institution_id = ?
+      `).get(citizen.id, institution.id);
+      if (existing) {
+        if (!existing.active) {
+          this.db.prepare(
+            "UPDATE citizen_relationships SET active = 1 WHERE id = ?",
+          ).run(existing.id);
+        }
+        return {
+          citizenId: citizen.id,
+          connected: false,
+          institution: {
+            id: institution.id,
+            publicId: institution.public_id,
+            name: institution.name,
+          },
+        };
       }
 
-      const institution = this.db.prepare(
-        "SELECT id, slug, name FROM institutions WHERE id = ?",
-      ).get(claim.institution_id);
-      return { citizenId: citizen.id, institution };
+      this.db.prepare(`
+        INSERT INTO citizen_relationships
+          (id, citizen_id, institution_id, active, created_at)
+        VALUES (?, ?, ?, 1, ?)
+      `).run(randomUUID(), citizen.id, institution.id, nowIso());
+      return {
+        citizenId: citizen.id,
+        connected: true,
+        institution: {
+          id: institution.id,
+          publicId: institution.public_id,
+          name: institution.name,
+        },
+      };
     })();
   }
 
@@ -258,7 +292,7 @@ export class AppDatabase {
       SELECT 1 FROM citizen_relationships
       WHERE citizen_id = ? AND institution_id = ? AND active = 1
     `).get(citizen.id, institutionId);
-    if (!relationship) throw forbidden("INSTITUTION_RELATIONSHIP_REQUIRED", "The institution has not been claimed");
+    if (!relationship) throw forbidden("INSTITUTION_RELATIONSHIP_REQUIRED", "The institution is not connected to this citizen");
     const id = randomUUID();
     const timestamp = nowIso();
     this.db.prepare(`
@@ -274,9 +308,6 @@ export class AppDatabase {
       id: row.id,
       institutionId: row.institution_id,
       institutionName: row.institution_name,
-      recipientReference: row.recipient_reference_enc
-        ? this.crypto.decrypt(row.recipient_reference_enc)
-        : undefined,
       certificateType: this.crypto.decrypt(row.certificate_type_enc),
       status: row.status,
       documentHash: row.document_hash,
@@ -315,12 +346,9 @@ export class AppDatabase {
     const allowed = this.getIssuerMemberships(address).some((item) => item.id === institutionId);
     if (!allowed) throw forbidden("INSTITUTION_ACCESS_DENIED", "The issuer does not belong to this institution");
     return this.db.prepare(`
-      SELECT r.*, i.name AS institution_name, cc.recipient_reference_enc
+      SELECT r.*, i.name AS institution_name
       FROM certificate_requests r
       JOIN institutions i ON i.id = r.institution_id
-      LEFT JOIN citizen_relationships cr
-        ON cr.citizen_id = r.citizen_id AND cr.institution_id = r.institution_id
-      LEFT JOIN claim_codes cc ON cc.id = cr.claim_code_id
       WHERE r.institution_id = ?
       ORDER BY r.created_at DESC
     `).all(institutionId).map((row) => this.mapRequest(row));

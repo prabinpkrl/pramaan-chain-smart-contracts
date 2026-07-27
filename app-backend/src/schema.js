@@ -3,7 +3,7 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS institutions (
   id TEXT PRIMARY KEY,
-  slug TEXT NOT NULL UNIQUE,
+  public_id TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL
@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS institutions (
 
 CREATE TABLE IF NOT EXISTS issuer_memberships (
   id TEXT PRIMARY KEY,
-  institution_id TEXT NOT NULL REFERENCES institutions(id),
-  wallet_hash TEXT NOT NULL,
+  institution_id TEXT NOT NULL UNIQUE REFERENCES institutions(id),
+  wallet_hash TEXT NOT NULL UNIQUE,
   wallet_enc TEXT NOT NULL,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
@@ -31,22 +31,9 @@ CREATE TABLE IF NOT EXISTS citizen_relationships (
   id TEXT PRIMARY KEY,
   citizen_id TEXT NOT NULL REFERENCES citizens(id),
   institution_id TEXT NOT NULL REFERENCES institutions(id),
-  claim_code_id TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   UNIQUE (citizen_id, institution_id)
-);
-
-CREATE TABLE IF NOT EXISTS claim_codes (
-  id TEXT PRIMARY KEY,
-  institution_id TEXT NOT NULL REFERENCES institutions(id),
-  code_hash TEXT NOT NULL UNIQUE,
-  recipient_reference_enc TEXT NOT NULL,
-  created_by_wallet_hash TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  claimed_at TEXT,
-  claimed_by_citizen_id TEXT REFERENCES citizens(id),
-  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS auth_nonces (

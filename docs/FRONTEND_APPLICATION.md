@@ -40,10 +40,10 @@ Administrator issuer authorization is also signed directly by the currently
 authenticated administrator's injected wallet. The frontend waits for the
 receipt and verifies the resulting issuer status through the read-only
 gateway. No administrator private key is loaded into either backend. Issuer
-removal remains outside the prototype UI. On-chain authorization alone does
-not create a private institution membership; the application backend must
-already contain that separately managed relationship before it derives the
-`ISSUER` application role.
+removal remains outside the prototype UI. After authorization, the
+administrator registers the institution name, stable public ID, and primary
+issuer membership through the private backend before it derives the `ISSUER`
+application role.
 
 ## Local setup
 
@@ -78,17 +78,17 @@ as base64, and place that value in the gitignored `.env` as
 `APP_DATA_ENCRYPTION_KEY`. Configure `SEPOLIA_RPC_URL` there. Do not reuse a
 wallet private key as the encryption key or expose the value in terminal logs.
 
-Seed the public test issuer membership and start:
+Test and start the empty application database:
 
 ```bash
-npm run seed
 npm test
 npm start
 ```
 
-The seed command stores the issuer address encrypted and creates the configured
-institution. It does not authorize the address on-chain and never needs a
-private key.
+An on-chain administrator signs in and creates institutions through the admin
+portal. The portal authorizes a new primary issuer with the administrator's
+browser wallet when necessary, then registers the public institution ID and
+encrypted issuer membership through the application backend.
 
 ### Frontend
 
@@ -116,7 +116,8 @@ signature, the application backend derives capabilities:
 - `CITIZEN` from an active private citizen–institution relationship; and
 - `UNLINKED` when signature control is valid but no relationship exists.
 
-An unlinked wallet can only inspect its session, log out, and claim a code.
+An unlinked wallet can inspect its session, log out, and connect to an
+institution using its exact public ID.
 Authorization is re-derived for every protected request. Removing an issuer
 therefore blocks its active session immediately.
 
@@ -127,10 +128,10 @@ checks.
 ## Private storage
 
 SQLite stores operational UUIDs and statuses. AES-256-GCM protects wallet
-values, opaque recipient references, certificate types, and private workflow
-fields. HKDF-derived HMAC blind indexes permit normalized wallet lookup without
-searchable plaintext. Session tokens, SIWE nonces, and claim codes are stored
-only as hashes.
+values, certificate types, and private workflow fields. HKDF-derived HMAC
+blind indexes permit normalized wallet lookup without searchable plaintext.
+Session tokens and SIWE nonces are stored only as hashes. Institution names
+and public IDs are intentionally readable and shareable.
 
 This is field encryption, not SQLCipher. Database structure, operational IDs,
 and status values remain visible. Database files live under
@@ -139,18 +140,19 @@ Git.
 
 ## Citizen relationship
 
-1. A currently authorized issuer creates a 128-bit, single-use claim code for
-   its institution and an encrypted opaque recipient reference.
-2. The institution gives the code to the known citizen outside the
-   application.
-3. The citizen signs in with a wallet and claims the code.
-4. One atomic transaction checks expiry and use, creates the citizen and
-   relationship when necessary, and consumes the code.
-5. The citizen may then submit an institution-scoped certificate request.
+1. An administrator creates an institution with a stable, human-readable
+   public ID such as `TU-NEPAL` and one primary issuer wallet.
+2. The institution shares that ID with citizens as text or a QR/link outside
+   the application.
+3. The citizen signs in with SIWE and enters the exact public ID.
+4. One atomic transaction creates the private citizen and institution
+   relationship, or returns the existing relationship idempotently.
+5. The citizen can connect to multiple institutions and submit a separate
+   institution-scoped certificate request to any of them.
 
-Codes expire after 24 hours. Creation is limited to ten per hour per issuer and
-institution; claim attempts are limited to five per 15 minutes per wallet and
-IP.
+No approval or secret claim code is involved. Connection attempts are
+rate-limited per wallet and IP. The public ID locates an institution; it does
+not prove student status or civil identity.
 
 ## Issuance concurrency and confirmation
 
@@ -210,8 +212,10 @@ Principal endpoints:
 | `POST /api/auth/nonce` | Build a SIWE message for an address |
 | `POST /api/auth/verify` | Verify signature and derive roles |
 | `GET /api/auth/session` | Refresh authorization and CSRF token |
-| `POST /api/issuer/claim-codes` | Create one strong one-time code |
-| `POST /api/citizen/claim-codes/claim` | Atomically create the relationship |
+| `GET /api/admin/institutions` | List registered institutions and authorization |
+| `POST /api/admin/institutions` | Register an authorized primary issuer and public institution ID |
+| `POST /api/citizen/institutions/connect` | Connect the SIWE wallet using a public institution ID |
+| `GET /api/citizen/institutions` | List the citizen's connected institutions |
 | `POST /api/citizen/requests` | Create a private institution request |
 | `GET /api/issuer/requests` | Read an institution-scoped queue |
 | `POST /api/issuer/requests/:id/prepare-issuance` | Freeze request and hash |
@@ -226,8 +230,8 @@ The frontend uses the blockchain gateway's public
 
 - This is a local fellowship prototype, not a production deployment.
 - Wallet recovery and address rotation are not implemented.
-- The administrator UI supports adding an issuer on-chain, but not issuer
-  removal or institution-membership administration.
+- The administrator UI creates institutions and primary issuer memberships,
+  but does not support removal, deactivation, or wallet rotation.
 - A processing request deliberately requires same-hash resumption or manual
   transaction reconciliation.
 - Encrypted database backup, rotation, and disaster recovery require a later

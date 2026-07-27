@@ -20,7 +20,7 @@ import CitizenDashboard from "../pages/citizen/Dashboard";
 import VerifyDocument from "../pages/citizen/VerifyDocument";
 import MyDocuments from "../pages/citizen/MyDocuments";
 import VerificationHistory from "../pages/citizen/VerificationHistory";
-import ClaimInstitution from "../pages/citizen/ClaimInstitution";
+import ConnectInstitution from "../pages/citizen/ConnectInstitution";
 import CitizenRequests from "../pages/citizen/CitizenRequests";
 
 function AppRoutes() {
@@ -135,13 +135,14 @@ function AppRoutes() {
           }
         />
         <Route
-          path="/citizen/claim"
+          path="/citizen/connect"
           element={
             <ProtectedRoute allowedRoles={["UNLINKED", "CITIZEN"]}>
-              <ClaimInstitution />
+              <ConnectInstitution />
             </ProtectedRoute>
           }
         />
+        <Route path="/citizen/claim" element={<Navigate to="/citizen/connect" replace />} />
         <Route
           path="/citizen/requests"
           element={

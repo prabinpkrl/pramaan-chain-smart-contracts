@@ -2,7 +2,7 @@ export const ROLE_HOME = {
   ADMIN: "/admin/dashboard",
   ISSUER: "/issuer/dashboard",
   CITIZEN: "/citizen/dashboard",
-  UNLINKED: "/citizen/claim",
+  UNLINKED: "/citizen/connect",
 };
 
 export function homeForRole(role) {

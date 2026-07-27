@@ -53,6 +53,9 @@ function Dashboard() {
           Review private citizen requests and sign certificate hashes with the
           authenticated, authorized issuer wallet.
         </p>
+        <p className="mt-3 font-mono text-sm text-blue-100">
+          Public institution ID: {institution.publicId}
+        </p>
       </div>
 
       {/* Statistics */}

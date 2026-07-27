@@ -1,158 +1,208 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { Search, UserPlus } from "lucide-react";
+import { Building2, Search } from "lucide-react";
 
-import DashboardLayout from "../../components/layout/DashboardLayout";
-import Input from "../../components/common/Input";
-import Button from "../../components/common/Button";
 import Badge from "../../components/common/Badge";
+import Button from "../../components/common/Button";
 import EtherscanLink from "../../components/common/EtherscanLink";
-
+import Input from "../../components/common/Input";
+import DashboardLayout from "../../components/layout/DashboardLayout";
 import { useAuth } from "../../context/useAuth";
 import { apiErrorMessage } from "../../services/api";
 import {
   authorizeIssuerOnChain,
   validateIssuerAddress,
 } from "../../services/contractService";
-import { checkIssuer } from "../../services/documentService";
+import {
+  checkIssuer,
+  listAdminInstitutions,
+  registerInstitution,
+} from "../../services/documentService";
+import { normalizePublicInstitutionId } from "../../utils/institution";
 
 function ManageIssuers() {
   const { session } = useAuth();
   const [lookupAddress, setLookupAddress] = useState("");
   const [lookupResult, setLookupResult] = useState(null);
   const [checking, setChecking] = useState(false);
+  const [institutionName, setInstitutionName] = useState("");
+  const [publicId, setPublicId] = useState("");
   const [issuerAddress, setIssuerAddress] = useState("");
-  const [authorizing, setAuthorizing] = useState(false);
+  const [institutions, setInstitutions] = useState([]);
+  const [provisioning, setProvisioning] = useState(false);
   const [authorizationTxHash, setAuthorizationTxHash] = useState("");
   const [authorizationVerified, setAuthorizationVerified] = useState(false);
 
-  const handleLookup = async (e) => {
-    e.preventDefault();
+  const loadInstitutions = useCallback(async () => {
+    setInstitutions(await listAdminInstitutions());
+  }, []);
 
-    if (!lookupAddress) {
+  useEffect(() => {
+    listAdminInstitutions()
+      .then(setInstitutions)
+      .catch((error) => toast.error(apiErrorMessage(error)));
+  }, []);
+
+  const handleLookup = async (event) => {
+    event.preventDefault();
+    if (!lookupAddress.trim()) {
       toast.error("Enter a wallet address to check.");
       return;
     }
-
     try {
       setChecking(true);
-      const result = await checkIssuer(lookupAddress);
+      const normalized = validateIssuerAddress(lookupAddress.trim());
+      const result = await checkIssuer(normalized);
+      setLookupAddress(normalized);
       setLookupResult(result);
     } catch (error) {
-      console.error(error);
-      toast.error(error.response?.data?.error?.message || "Lookup failed.");
+      toast.error(apiErrorMessage(error));
       setLookupResult(null);
     } finally {
       setChecking(false);
     }
   };
 
-  const handleAuthorize = async (event) => {
+  const handleProvision = async (event) => {
     event.preventDefault();
-    let normalized;
+    let normalizedPublicId;
+    let normalizedIssuer;
     try {
-      normalized = validateIssuerAddress(issuerAddress.trim());
+      normalizedPublicId = normalizePublicInstitutionId(publicId);
+      normalizedIssuer = validateIssuerAddress(issuerAddress.trim());
+      if (institutionName.trim().length < 2) {
+        throw new Error("Institution name must contain at least two characters");
+      }
     } catch (error) {
       toast.error(error.message);
       return;
     }
 
-    setAuthorizing(true);
+    setProvisioning(true);
     setAuthorizationTxHash("");
     setAuthorizationVerified(false);
     try {
-      const current = await checkIssuer(normalized);
-      if (current.authorized) {
-        setLookupAddress(normalized);
-        setLookupResult(current);
-        toast.error("This wallet is already an authorized issuer.");
-        return;
-      }
-      if (
-        !window.confirm(
-          `Authorize ${normalized} as an issuer on Sepolia? This submits one permanent public transaction.`,
-        )
-      ) return;
-
-      const transactionHash = await authorizeIssuerOnChain(
-        normalized,
-        session.address,
-      );
-      setAuthorizationTxHash(transactionHash);
-      const result = await checkIssuer(normalized);
-      if (!result.authorized) {
-        throw new Error("The transaction confirmed, but issuer authorization could not be verified");
+      let issuerStatus = await checkIssuer(normalizedIssuer);
+      if (!issuerStatus.authorized) {
+        if (
+          !window.confirm(
+            `Authorize ${normalizedIssuer} as the primary issuer for ${normalizedPublicId} on Sepolia?`,
+          )
+        ) return;
+        const transactionHash = await authorizeIssuerOnChain(
+          normalizedIssuer,
+          session.address,
+        );
+        setAuthorizationTxHash(transactionHash);
+        issuerStatus = await checkIssuer(normalizedIssuer);
+        if (!issuerStatus.authorized) {
+          throw new Error(
+            "The transaction confirmed, but issuer authorization could not be verified",
+          );
+        }
       }
       setAuthorizationVerified(true);
-      setLookupAddress(normalized);
-      setLookupResult(result);
+
+      const institution = await registerInstitution(
+        normalizedPublicId,
+        institutionName.trim(),
+        normalizedIssuer,
+      );
+      await loadInstitutions();
+      setInstitutionName("");
+      setPublicId("");
       setIssuerAddress("");
-      toast.success("Issuer authorized on Sepolia.");
+      setLookupAddress(normalizedIssuer);
+      setLookupResult(issuerStatus);
+      toast.success(`${institution.name} registered with ID ${institution.publicId}.`);
     } catch (error) {
       toast.error(apiErrorMessage(error));
     } finally {
-      setAuthorizing(false);
+      setProvisioning(false);
+    }
+  };
+
+  const copyPublicId = async (value) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("Public institution ID copied.");
+    } catch {
+      toast.error("Could not copy the institution ID.");
     }
   };
 
   return (
     <DashboardLayout>
-      <h1 className="text-3xl font-bold mb-6">Manage Issuers</h1>
+      <h1 className="mb-6 text-3xl font-bold">Institutions and Issuers</h1>
 
-      {/* Real issuer lookup */}
-      <div className="bg-white rounded-xl shadow p-6 mb-8">
-        <h2 className="text-xl font-semibold mb-4">Check Issuer Authorization</h2>
-
-        <form onSubmit={handleLookup} className="flex gap-4 items-end">
+      <section className="mb-8 rounded-xl bg-white p-6 shadow">
+        <h2 className="mb-4 text-xl font-semibold">Check Issuer Authorization</h2>
+        <form onSubmit={handleLookup} className="flex items-end gap-4">
           <div className="flex-1">
             <Input
+              id="issuerLookup"
               label="Wallet Address"
               placeholder="0x..."
               value={lookupAddress}
-              onChange={(e) => setLookupAddress(e.target.value)}
+              onChange={(event) => setLookupAddress(event.target.value)}
             />
           </div>
-
           <Button type="submit" loading={checking}>
             <Search size={16} />
             Check
           </Button>
         </form>
-
         {lookupResult && (
           <div className="mt-4 flex items-center gap-3">
             <span className="font-mono text-sm">{lookupResult.address}</span>
             <Badge status={lookupResult.authorized ? "AUTHORIZED" : "UNAUTHORIZED"} />
           </div>
         )}
-      </div>
+      </section>
 
-      <div className="bg-white rounded-xl shadow p-6">
-        <h2 className="text-xl font-semibold mb-2">Authorize Issuer On-chain</h2>
-
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800 mb-5">
-          This action submits one public Sepolia transaction. MetaMask must be
-          connected to the same administrator wallet used for SIWE login.
-          The administrator key stays in the browser wallet and is never sent
-          to either backend. On-chain authorization does not create the
-          issuer&apos;s private institution membership; that relationship must
-          already exist in the application backend.
+      <section className="mb-8 rounded-xl bg-white p-6 shadow">
+        <h2 className="mb-2 text-xl font-semibold">Create Institution</h2>
+        <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          The public ID is permanent and shareable, for example{" "}
+          <code>TU-NEPAL</code>. If needed, MetaMask submits one Sepolia
+          authorization transaction. The primary issuer wallet is then
+          registered privately with the institution.
         </div>
-
-        <form onSubmit={handleAuthorize} className="flex gap-4 items-end">
-          <div className="flex-1">
+        <form onSubmit={handleProvision} className="grid gap-2 lg:grid-cols-2">
+          <Input
+            id="institutionName"
+            label="Institution Name"
+            placeholder="Tribhuvan University"
+            value={institutionName}
+            onChange={(event) => setInstitutionName(event.target.value)}
+          />
+          <Input
+            id="publicInstitutionId"
+            label="Public Institution ID"
+            placeholder="TU-NEPAL"
+            value={publicId}
+            onChange={(event) => setPublicId(event.target.value)}
+            autoComplete="off"
+          />
+          <div className="lg:col-span-2">
             <Input
-              id="issuerAddress"
-              label="New Issuer Wallet Address"
+              id="primaryIssuerAddress"
+              label="Primary Issuer Wallet"
               placeholder="0x..."
               value={issuerAddress}
               onChange={(event) => setIssuerAddress(event.target.value)}
             />
           </div>
-          <Button type="submit" loading={authorizing} disabled={!issuerAddress.trim()}>
-            <UserPlus size={16} />
-            Authorize Issuer
-          </Button>
+          <div className="lg:col-span-2">
+            <Button
+              type="submit"
+              loading={provisioning}
+              disabled={!institutionName.trim() || !publicId.trim() || !issuerAddress.trim()}
+            >
+              <Building2 size={16} />
+              Authorize and Register Institution
+            </Button>
+          </div>
         </form>
 
         {authorizationTxHash && (
@@ -161,25 +211,45 @@ function ManageIssuers() {
               ? "border-green-200 bg-green-50"
               : "border-amber-200 bg-amber-50"
           }`}>
-            <p className={`mb-2 font-semibold ${
-              authorizationVerified ? "text-green-800" : "text-amber-800"
-            }`}>
+            <p className="mb-2 font-semibold">
               {authorizationVerified
-                ? "Authorization confirmed and independently read back."
-                : "Transaction confirmed. Recheck issuer status before retrying."}
+                ? "Issuer authorization confirmed."
+                : "Transaction confirmed. Retry registration without resending it."}
             </p>
-            <p className="mb-3 break-all font-mono text-xs text-gray-700">
-              {authorizationTxHash}
-            </p>
+            <p className="mb-3 break-all font-mono text-xs">{authorizationTxHash}</p>
             <EtherscanLink txHash={authorizationTxHash} />
           </div>
         )}
+      </section>
 
-        <p className="mt-4 text-xs text-gray-500">
-          Issuer removal and administrator emergency revocation remain separate,
-          deliberately unimplemented operations.
-        </p>
-      </div>
+      <section className="rounded-xl bg-white p-6 shadow">
+        <h2 className="mb-4 text-xl font-semibold">Registered Institutions</h2>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {institutions.map((institution) => (
+            <article key={institution.id} className="rounded-lg border p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold">{institution.name}</h3>
+                  <button
+                    type="button"
+                    onClick={() => copyPublicId(institution.publicId)}
+                    className="mt-1 font-mono text-sm text-blue-700 hover:underline"
+                  >
+                    {institution.publicId} · Copy
+                  </button>
+                </div>
+                <Badge status={institution.authorized ? "AUTHORIZED" : "UNAUTHORIZED"} />
+              </div>
+              <p className="mt-4 break-all font-mono text-xs text-gray-500">
+                {institution.issuerAddress}
+              </p>
+            </article>
+          ))}
+          {institutions.length === 0 && (
+            <p className="text-gray-500">No institutions are registered yet.</p>
+          )}
+        </div>
+      </section>
     </DashboardLayout>
   );
 }

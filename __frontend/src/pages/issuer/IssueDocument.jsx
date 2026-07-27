@@ -10,7 +10,6 @@ import { apiErrorMessage } from "../../services/api";
 import { issueOnChain } from "../../services/contractService";
 import {
   confirmIssuance,
-  createClaimCode,
   listIssuerRequests,
   prepareIssuance,
   rejectRequest,
@@ -24,8 +23,6 @@ function IssueDocument() {
   const [requests, setRequests] = useState([]);
   const [files, setFiles] = useState({});
   const [transactionHashes, setTransactionHashes] = useState({});
-  const [recipientReference, setRecipientReference] = useState("");
-  const [claim, setClaim] = useState(null);
   const [busyId, setBusyId] = useState("");
 
   const load = useCallback(async () => {
@@ -39,17 +36,6 @@ function IssueDocument() {
       .then(setRequests)
       .catch((error) => toast.error(apiErrorMessage(error)));
   }, [institutionId]);
-
-  const generateClaim = async (event) => {
-    event.preventDefault();
-    try {
-      setClaim(await createClaimCode(institutionId, recipientReference.trim()));
-      setRecipientReference("");
-      toast.success("Single-use claim code created.");
-    } catch (error) {
-      toast.error(apiErrorMessage(error));
-    }
-  };
 
   const issue = async (request) => {
     const file = files[request.id];
@@ -135,45 +121,13 @@ function IssueDocument() {
         )}
       </div>
 
-      <section className="mb-8 rounded-xl bg-white p-6 shadow">
-        <h2 className="text-xl font-semibold">Create citizen claim code</h2>
-        <p className="mb-4 mt-1 text-sm text-gray-600">
-          Use an opaque internal reference, never a name or government identifier.
-          The single-use code expires and is displayed only here.
-        </p>
-        <form className="max-w-xl" onSubmit={generateClaim}>
-          <Input
-            id="recipientReference"
-            label="Opaque recipient reference"
-            value={recipientReference}
-            onChange={(event) => setRecipientReference(event.target.value)}
-            placeholder="REQUEST-2026-001"
-          />
-          <Button
-            type="submit"
-            disabled={!institutionId || recipientReference.trim().length < 3}
-          >
-            Generate code
-          </Button>
-        </form>
-        {claim && (
-          <div className="mt-5 rounded-lg border border-amber-300 bg-amber-50 p-4">
-            <strong>Copy this code now:</strong>
-            <code className="my-2 block break-all rounded bg-white p-3">{claim.code}</code>
-            <span className="text-sm text-gray-600">Expires {formatDate(claim.expiresAt)}</span>
-          </div>
-        )}
-      </section>
-
       <div className="grid gap-5">
         {requests.map((request) => (
           <article key={request.id} className="rounded-xl bg-white p-6 shadow">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold">{request.certificateType}</h2>
-                <p className="text-sm text-gray-500">
-                  Reference: {request.recipientReference || "Private assignment"}
-                </p>
+                <p className="text-sm text-gray-500">Private citizen request</p>
               </div>
               <Badge status={request.status} />
             </div>

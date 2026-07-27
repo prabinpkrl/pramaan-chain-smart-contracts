@@ -3,7 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import { ipKeyGenerator, rateLimit } from "express-rate-limit";
-import { getAddress } from "ethers";
+import { ZeroAddress, getAddress } from "ethers";
 import {
   createSiweChallenge,
   deriveAuthorization,
@@ -26,6 +26,27 @@ function text(value, name, { min = 1, max = 200 } = {}) {
 
 function institutionId(req) {
   return text(req.query.institutionId || req.body?.institutionId, "institutionId", { max: 100 });
+}
+
+function publicInstitutionId(value) {
+  const normalized = text(value, "publicId", { min: 3, max: 48 }).toUpperCase();
+  if (!/^[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(normalized)) {
+    throw badRequest(
+      "INVALID_PUBLIC_ID",
+      "publicId must use letters, numbers, and single hyphens between segments",
+    );
+  }
+  return normalized;
+}
+
+function walletAddress(value, name) {
+  try {
+    const normalized = getAddress(value);
+    if (normalized === ZeroAddress) throw new Error("zero address");
+    return normalized;
+  } catch {
+    throw badRequest("INVALID_WALLET_ADDRESS", `${name} must be a non-zero Ethereum address`);
+  }
 }
 
 function asyncRoute(handler) {
@@ -59,15 +80,15 @@ export function createApp({ db, chain, config, disableRateLimits = false }) {
     ? (_req, _res, next) => next()
     : rateLimit({ standardHeaders: "draft-8", legacyHeaders: false, ...options });
   const authLimiter = limiter({ windowMs: 15 * 60 * 1000, limit: 20 });
-  const claimLimiter = limiter({
+  const connectionLimiter = limiter({
     windowMs: 15 * 60 * 1000,
-    limit: 5,
+    limit: 10,
     keyGenerator: (req) => `${ipKeyGenerator(req.ip)}:${req.auth?.address || "anonymous"}`,
   });
-  const createClaimLimiter = limiter({
+  const institutionLimiter = limiter({
     windowMs: 60 * 60 * 1000,
     limit: 10,
-    keyGenerator: (req) => `${req.auth?.address || ipKeyGenerator(req.ip)}:${req.body?.institutionId || "unknown"}`,
+    keyGenerator: (req) => `${req.auth?.address || ipKeyGenerator(req.ip)}:${req.body?.publicId || "unknown"}`,
   });
 
   const sessionRequired = requireSession(db);
@@ -82,6 +103,7 @@ export function createApp({ db, chain, config, disableRateLimits = false }) {
   });
   const issuerRequired = [sessionRequired, refreshAuthorization, requireRole("ISSUER")];
   const citizenRequired = [sessionRequired, refreshAuthorization, requireRole("CITIZEN")];
+  const adminRequired = [sessionRequired, refreshAuthorization, requireRole("ADMIN")];
 
   app.get("/api/health", asyncRoute(async (_req, res) => {
     const blockchain = await chain.checkReady();
@@ -134,42 +156,61 @@ export function createApp({ db, chain, config, disableRateLimits = false }) {
     res.status(204).end();
   });
 
-  app.post(
-    "/api/issuer/claim-codes",
-    ...issuerRequired,
-    createClaimLimiter,
-    csrfRequired,
-    asyncRoute(async (req, res) => {
-      const selectedInstitutionId = institutionId(req);
-      if (!req.auth.authorization.issuerMemberships.some((item) => item.id === selectedInstitutionId)) {
-        throw forbidden("INSTITUTION_ACCESS_DENIED", "The issuer does not belong to this institution");
-      }
-      const recipientReference = text(
-        req.body?.recipientReference,
-        "recipientReference",
-        { min: 3, max: 120 },
-      );
-      const claim = db.createClaimCode({
-        institutionId: selectedInstitutionId,
-        issuerAddress: req.auth.address,
-        recipientReference,
-        ttlMs: config.claimTtlMs,
-      });
-      res.status(201).json(claim);
+  app.get(
+    "/api/admin/institutions",
+    ...adminRequired,
+    asyncRoute(async (_req, res) => {
+      const institutions = await Promise.all(db.listInstitutions().map(async (institution) => ({
+        ...institution,
+        authorized: await chain.isAuthorizedIssuer(institution.issuerAddress),
+      })));
+      res.json({ institutions });
     }),
   );
 
   app.post(
-    "/api/citizen/claim-codes/claim",
+    "/api/admin/institutions",
+    ...adminRequired,
+    institutionLimiter,
+    csrfRequired,
+    asyncRoute(async (req, res) => {
+      const issuerAddress = walletAddress(req.body?.issuerAddress, "issuerAddress");
+      if (!await chain.isAuthorizedIssuer(issuerAddress)) {
+        throw forbidden(
+          "ISSUER_NOT_AUTHORIZED",
+          "The issuer wallet must be authorized on-chain before registration",
+        );
+      }
+      const institution = db.createInstitution({
+        publicId: publicInstitutionId(req.body?.publicId),
+        name: text(req.body?.name, "name", { min: 2, max: 120 }),
+        issuerAddress,
+      });
+      res.status(201).json(institution);
+    }),
+  );
+
+  app.post(
+    "/api/citizen/institutions/connect",
     sessionRequired,
     refreshAuthorization,
     csrfRequired,
-    claimLimiter,
+    connectionLimiter,
     asyncRoute(async (req, res) => {
-      const code = text(req.body?.code, "code", { min: 20, max: 64 });
-      const result = db.claimCode({ code, address: req.auth.address });
+      const publicId = publicInstitutionId(req.body?.publicId);
+      const target = db.getInstitutionByPublicId(publicId);
+      if (!target) {
+        throw notFound("INSTITUTION_NOT_FOUND", "No active institution uses that public ID");
+      }
+      if (!await chain.isAuthorizedIssuer(target.issuerAddress)) {
+        throw forbidden(
+          "INSTITUTION_ISSUER_INACTIVE",
+          "The institution's issuer is not currently authorized",
+        );
+      }
+      const result = db.connectCitizen({ publicId, address: req.auth.address });
       const authorization = await deriveAuthorization({ db, chain, address: req.auth.address });
-      res.json({ ...result, authorization });
+      res.status(result.connected ? 201 : 200).json({ ...result, authorization });
     }),
   );
 

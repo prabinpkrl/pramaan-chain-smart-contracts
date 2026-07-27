@@ -60,7 +60,9 @@ function Profile() {
               {session.issuerMemberships.map((institution) => (
                 <li key={institution.id} className="rounded-lg bg-gray-100 p-3">
                   <span className="font-semibold">{institution.name}</span>
-                  <span className="ml-2 font-mono text-xs text-gray-500">{institution.id}</span>
+                  <span className="ml-2 font-mono text-xs text-blue-700">
+                    {institution.publicId}
+                  </span>
                 </li>
               ))}
             </ul>
