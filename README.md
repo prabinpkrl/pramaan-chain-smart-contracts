@@ -1,317 +1,283 @@
-# PramaanChain Blockchain
+# PramaanChain
 
-PramaanChain is a Solidity certificate-proof registry. Authorized institutions
-anchor SHA-256 document hashes, and anyone can read whether a hash is unknown,
-active, or permanently revoked. The contract never receives or stores the
-certificate file or citizen information.
+PramaanChain is an Ethereum certificate-proof system. Authorized institutions
+anchor SHA-256 document hashes, and anyone can check whether a matching proof
+is active, revoked, or unknown. Certificate files and citizen personal data
+remain off-chain.
 
-The local implementation and demonstration are complete. The independently
-reviewed contract is also deployed and source-verified on Sepolia. No
-production deployment has occurred.
+This repository contains the complete prototype:
+
+- a Solidity and Hardhat smart contract;
+- a public Express blockchain gateway and event index;
+- a private Express, SIWE, encrypted-SQLite application backend; and
+- a React/Vite public verifier plus administrator, issuer, and citizen portals.
+
+The project uses Ethereum Sepolia for application development. A teammate can
+deploy a new contract from this repository and become the administrator of
+that independent deployment; they do not need access to the original project
+administrator wallet.
+
+## Start here
+
+| Goal | Guide |
+| --- | --- |
+| Deploy and run an independent Sepolia demo after cloning | [`docs/demo.md`](docs/demo.md) |
+| Understand components and trust boundaries | [`docs/system-architecture.md`](docs/system-architecture.md) |
+| Browse every current and historical document | [`docs/README.md`](docs/README.md) |
+| Configure the complete application | [`docs/FRONTEND_APPLICATION.md`](docs/FRONTEND_APPLICATION.md) |
+| Use the public blockchain API | [`docs/BACKEND_API.md`](docs/BACKEND_API.md) |
+| Understand the contract interface | [`docs/CONTRACT_DESIGN.md`](docs/CONTRACT_DESIGN.md) |
+
+The independent demo guide is the recommended onboarding path for a teammate,
+reviewer, or mentor.
 
 ## Requirements
 
+- Git
 - Node.js `22.13.0` or newer
-- npm (included with Node.js)
+- npm
+- A browser wallet that supports Sepolia
+- A Sepolia RPC endpoint
+- Two new test-only Ethereum accounts for an independent deployment
+- Sepolia ETH for those test-only accounts
+- An Etherscan API key if source verification is required
 
-No environment variables, wallet secrets, or external RPC service are needed
-for the local workflow.
+Docker is not used in the current workflow.
 
-## Clean installation
+Never use a personal or mainnet wallet. Never commit or share a private key or
+seed phrase.
 
-From this `blockchain/` directory:
+## Clone and install
 
 ```bash
+git clone https://github.com/prabinpkrl/pramaan-chain-smart-contracts.git
+cd pramaan-chain-smart-contracts
+
 npm ci
+npm --prefix backend ci
+npm --prefix app-backend ci
+npm --prefix __frontend ci
+```
+
+Each component has its own lockfile and dependency installation.
+
+## Verify the repository
+
+Run the contract checks:
+
+```bash
 npm run compile
 npm test
 ```
 
-`npm ci` installs the exact dependency versions recorded in `package-lock.json`.
-Compilation uses Solidity `0.8.28`. A successful compile generates the contract
-artifact and ABI at:
+Run the service and frontend checks:
+
+```bash
+npm --prefix backend test
+npm --prefix app-backend test
+npm --prefix __frontend run lint
+npm --prefix __frontend test
+npm --prefix __frontend run build
+```
+
+Compilation generates the contract artifact and ABI at:
 
 ```text
 artifacts/contracts/PramaanChain.sol/PramaanChain.json
 ```
 
-The ABI is the `abi` property of that JSON file. `artifacts/` is generated and
-ignored by Git, so compile before attempting to load it.
+Generated artifacts, dependencies, databases, build output, keystore material,
+and `.env` files are ignored by Git.
 
-The repository contains four independently tested components:
+## Independent Sepolia deployment
 
-| Component | Test suite |
-| --- | ---: |
-| Solidity contract | 45 tests |
-| Public blockchain gateway | 28 tests |
-| Private application backend | 8 tests |
-| React frontend | 18 tests plus 17 deterministic browser journeys and 1 live read-only browser check |
+The checked deployment command uses two signers:
 
-See [`docs/README.md`](docs/README.md) for the complete documentation index and
-the distinction between current operating guides and historical completion
-evidence.
+1. account 0 deploys the contract and receives `ADMIN_ROLE`;
+2. account 1 is authorized as an issuer.
 
-## Commands
+It then issues and revokes one synthetic proof so the complete lifecycle is
+checked against the new deployment:
 
-| Command | Purpose |
+```bash
+npm run sepolia:deploy-demo
+```
+
+This command sends four Sepolia transactions and requires deliberate
+test-wallet and RPC configuration. Follow
+[`docs/demo.md`](docs/demo.md) before running it. The guide uses Hardhat's
+encrypted keystore by default and explains the optional gitignored `.env`
+fallback.
+
+The command reports the new contract address, deployment block, administrator,
+issuer, transaction hashes, and checked statuses. Use that new address and
+block in every component's local environment configuration.
+
+## Configure the application
+
+After deploying an independent contract, create these ignored files:
+
+```bash
+cp backend/.env.example backend/.env
+cp app-backend/.env.example app-backend/.env
+cp __frontend/.env.example __frontend/.env
+```
+
+The same deployment values must be used everywhere:
+
+| Value | Gateway | Application backend | Frontend |
+| --- | --- | --- | --- |
+| Chain ID `11155111` | `BLOCKCHAIN_CHAIN_ID` | `BLOCKCHAIN_CHAIN_ID` | `VITE_CHAIN_ID` |
+| New contract address | `PRAMAAN_CHAIN_ADDRESS` | `PRAMAAN_CHAIN_ADDRESS` | `VITE_CONTRACT_ADDRESS` |
+| Deployment block | `PRAMAAN_CHAIN_START_BLOCK` | Not used | Not used |
+| Sepolia RPC | `SEPOLIA_RPC_URL` | `SEPOLIA_RPC_URL` | Never exposed |
+
+The gateway should remain read-only for the browser-wallet application:
+
+```dotenv
+ISSUER_ADDRESS=
+ISSUER_PRIVATE_KEY=
+WRITE_API_KEY=
+```
+
+Administrator and issuer writes are signed by the selected browser or mobile
+wallet. No administrator or issuer key belongs in either application backend
+or the frontend.
+
+The private application backend additionally requires a new local
+`APP_DATA_ENCRYPTION_KEY`. The frontend may use
+`VITE_WALLETCONNECT_PROJECT_ID` to enable mobile-wallet QR login. All
+`VITE_*` values are public browser configuration.
+
+See [`docs/demo.md`](docs/demo.md) for exact values and setup order.
+
+## Run the complete application
+
+After the three component `.env` files are configured, open three terminals
+from the repository root.
+
+Terminal 1 — public blockchain gateway:
+
+```bash
+npm --prefix backend start
+```
+
+Terminal 2 — private application backend:
+
+```bash
+npm --prefix app-backend start
+```
+
+Terminal 3 — frontend:
+
+```bash
+npm --prefix __frontend run dev
+```
+
+Open:
+
+| Service | URL |
 | --- | --- |
-| `npm run compile` | Compile the Solidity contract and generate artifacts |
-| `npm test` | Run the complete contract test suite |
-| `npm run coverage` | Run tests with Solidity coverage reporting |
-| `npm run clean` | Remove Hardhat-generated build output |
-| `npm run local:node` | Start a persistent local Hardhat JSON-RPC node |
-| `npm run local:deploy` | Deploy a fresh contract to the running local node |
-| `npm run local:demo` | Run the full checked local certificate lifecycle |
-| `npm run sepolia:deploy-demo` | Run the guarded synthetic lifecycle on Sepolia; requires explicit deployment approval |
-| `npm run sepolia:verify -- <address>` | Verify a deployed Sepolia address on Etherscan |
+| Frontend | <http://localhost:5173> |
+| Gateway health | <http://localhost:3000/api/health> |
+| Application health | <http://localhost:4000/api/health> |
 
-## Local deployment
+The startup order matters because both backends validate the configured
+network and deployed bytecode before serving the application.
 
-Start the development blockchain in terminal 1:
+## Application walkthrough
+
+For a newly deployed contract:
+
+1. Sign in with the administrator account that deployed the contract.
+2. Open **Institutions and issuers** and register an institution with the
+   authorized issuer address reported by the deployment command.
+3. Change to the issuer account and sign in to the issuer workspace.
+4. Use a separate wallet as a citizen, connect it to the institution's public
+   ID, and submit a certificate request.
+5. Return to the issuer account, hash the exact certificate file in the
+   browser, and sign the issuance transaction.
+6. Verify the same file or its SHA-256 hash through the public verifier.
+
+Citizen login and public verification do not require gas. Issuance,
+revocation, and administrator authorization are Sepolia transactions.
+
+## Local contract development
+
+For contract development without Sepolia, start a local Hardhat network:
 
 ```bash
 npm run local:node
 ```
 
-Keep it running. In terminal 2, deploy a fresh contract:
+In another terminal:
 
 ```bash
 npm run local:deploy
-```
-
-The deployment script prints JSON containing the network, chain ID,
-administrator, contract address, deployment transaction hash, and deployment
-block. For a complete demonstration instead, run:
-
-```bash
+# or
 npm run local:demo
 ```
 
-The demonstration deploys a new contract and then:
+Local Hardhat accounts and state disappear when the local node is reset. Never
+reuse its printed development private keys on Sepolia or mainnet.
 
-1. authorizes a sample Hardhat development issuer;
-2. creates a SHA-256 hash from synthetic input;
-3. issues the hash and verifies it as `ACTIVE`;
-4. revokes it through the original issuer; and
-5. verifies it as `REVOKED`.
+## Main commands
 
-The script fails if the stored issuer or either expected status is incorrect.
-The captured Stage 8 run is in
-[`docs/STAGE8_DEMONSTRATION.md`](docs/STAGE8_DEMONSTRATION.md).
-
-Hardhat development accounts, addresses, transactions, and contract state are
-temporary. Stopping and restarting the local node resets the chain. Never use
-the printed development private keys on a public network or fund those
-addresses with real assets.
-
-## Sepolia deployment
-
-Sepolia is configured as an HTTP layer-1 network with chain ID `11155111`.
-Configuration values are lazy, so local compilation, tests, and demonstrations
-do not require Sepolia secrets.
-
-| Item | Public Sepolia testnet value |
+| Command | Purpose |
 | --- | --- |
-| Contract address | [`0x0bb21729BBDaBe54A289A1e924941F8F635Cab84`](https://sepolia.etherscan.io/address/0x0bb21729BBDaBe54A289A1e924941F8F635Cab84) |
-| Chain ID | `11155111` |
-| Deployment commit | `73a711d0694197e70e2c262fffd587183c7414fa` |
-| Administrator | `0x3537d004295AF62098e63DCF6bB8A7c6dAaCB447` |
-| Authorized issuer | `0x4e02876F9bfd58f9D2D542F9520055BeD3addd28` |
-| Source verification | [Verified contract on Etherscan](https://sepolia.etherscan.io/address/0x0bb21729BBDaBe54A289A1e924941F8F635Cab84#code) |
+| `npm run compile` | Compile Solidity and generate the ABI artifact |
+| `npm test` | Run contract tests |
+| `npm run coverage` | Run Solidity coverage |
+| `npm run local:node` | Start a persistent local Hardhat node |
+| `npm run local:deploy` | Deploy a fresh contract locally |
+| `npm run local:demo` | Run the checked local lifecycle |
+| `npm run sepolia:deploy-demo` | Deploy and exercise an independent Sepolia contract |
+| `npm run sepolia:verify -- <address>` | Verify source for a Sepolia deployment |
+| `npm --prefix backend start` | Start the public gateway |
+| `npm --prefix app-backend start` | Start the private application backend |
+| `npm --prefix __frontend run dev` | Start the frontend development server |
 
-The complete deployment, transaction, block, gas, lifecycle, and bytecode
-evidence is recorded in
-[`docs/SEPOLIA_DEPLOYMENT.md`](docs/SEPOLIA_DEPLOYMENT.md).
+## Documentation
 
-Use two new test-only wallets: account 0 is the administrator/deployer and
-account 1 is the sample issuer. Neither may be a personal or mainnet wallet.
-The administrator wallet is controlled by the blockchain lead, and private
-keys must never be shared, printed, or committed.
+### Architecture and integration
 
-The preferred local setup uses Hardhat's encrypted keystore:
+- [System architecture](docs/system-architecture.md)
+- [Contract design](docs/CONTRACT_DESIGN.md)
+- [Contract-to-backend handoff](docs/BACKEND_HANDOFF.md)
+- [Cryptography and blockchain boundary](docs/CRYPTOGRAPHY_ENGINE.md)
 
-```bash
-npx hardhat keystore set SEPOLIA_RPC_URL
-npx hardhat keystore set DEPLOYER_PRIVATE_KEY
-npx hardhat keystore set ISSUER_PRIVATE_KEY
-npx hardhat keystore set ETHERSCAN_API_KEY
-```
+### Application and APIs
 
-Exported environment variables, a gitignored `.env`, and GitHub repository
-secrets use the same names. `.env.example` contains placeholders only. The
-complete setup, wallet, CI, preflight, and safety requirements are in
-[`docs/SEPOLIA_PREPARATION.md`](docs/SEPOLIA_PREPARATION.md).
-The local Stage 10 checks are recorded in
-[`docs/STAGE10_VALIDATION.md`](docs/STAGE10_VALIDATION.md).
-The deployment commands remain available for reproducibility, but must not be
-rerun against Sepolia without a new explicitly approved deployment operation.
+- [Independent Sepolia demo](docs/demo.md)
+- [Application setup and private API](docs/FRONTEND_APPLICATION.md)
+- [Frontend implementation](docs/FRONTEND_INTEGRATION.md)
+- [Frontend package guide](__frontend/README.md)
+- [Public gateway API](docs/BACKEND_API.md)
+- [Gateway examples](docs/BACKEND_SAMPLES.md)
 
-## Contract roles
+### Historical evidence
 
-| Role | Permissions |
-| --- | --- |
-| Administrator | Authorize issuers, remove issuers, and revoke any certificate |
-| Authorized issuer | Issue new certificate hashes and revoke its own earlier certificates |
-| Public verifier | Read certificate records and verification status without a signer |
+- [Local lifecycle evidence](docs/STAGE8_DEMONSTRATION.md)
+- [Clean-install validation](docs/STAGE9_VALIDATION.md)
+- [Sepolia preparation record](docs/SEPOLIA_PREPARATION.md)
+- [Independent readiness validation](docs/STAGE10_VALIDATION.md)
+- [Original Sepolia deployment evidence](docs/SEPOLIA_DEPLOYMENT.md)
 
-The deployer receives `ADMIN_ROLE`. It does not automatically receive
-`ISSUER_ROLE`. Administrator membership is fixed in this version; inherited
-`grantRole`, `revokeRole`, and `renounceRole` calls are deliberately disabled.
-Removing an issuer blocks future issuance but does not invalidate its existing
-certificates or prevent it from revoking certificates it originally issued.
+Historical evidence describes the original reviewed deployment. It is not the
+configuration for a teammate's independent deployment.
 
-## Application interface
+## Security and privacy
 
-| Function | Who may call | Result |
-| --- | --- | --- |
-| `authorizeIssuer(address issuer)` | Administrator | Grants issuer authorization |
-| `removeIssuer(address issuer)` | Administrator | Removes future issuance permission |
-| `isAuthorizedIssuer(address issuer)` | Anyone | Returns `bool` |
-| `issueCertificate(bytes32 documentHash)` | Authorized issuer | Stores a unique active certificate record |
-| `getCertificate(bytes32 documentHash)` | Anyone | Returns issuer, timestamps, and status |
-| `verifyCertificate(bytes32 documentHash)` | Anyone | Returns the verification status enum |
-| `revokeCertificate(bytes32 documentHash)` | Original issuer or administrator | Permanently revokes an issued certificate |
+- Only a SHA-256 document digest and necessary blockchain metadata are public.
+- Certificate contents, names, addresses, marks, and citizen relationships
+  must never be stored on-chain.
+- Wallet connection is not authentication; login requires a separate SIWE
+  signature.
+- Browser hashing uses the exact file bytes and sends only the digest.
+- The application backend derives roles from current blockchain and private
+  database state; it never trusts a frontend-selected role.
+- Public-network writes must use synthetic data and test-only wallets.
+- Ethereum mainnet and production deployment remain outside this prototype.
 
-Verification status values are stable ABI integers:
-
-| Value | Name | Meaning |
-| ---: | --- | --- |
-| `0` | `NOT_FOUND` | The hash has never been issued |
-| `1` | `ACTIVE` | The hash was issued and has not been revoked |
-| `2` | `REVOKED` | The certificate was permanently revoked |
-
-The complete function, event, error, and state-transition specification is in
-[`docs/CONTRACT_DESIGN.md`](docs/CONTRACT_DESIGN.md). Backend configuration,
-ABI usage, hashing rules, event fields, transaction expectations, and known
-limitations are in
-[`docs/BACKEND_HANDOFF.md`](docs/BACKEND_HANDOFF.md).
-The clean-install walkthrough result is recorded in
-[`docs/STAGE9_VALIDATION.md`](docs/STAGE9_VALIDATION.md).
-
-## Sepolia backend gateway
-
-The repository includes an Express and ethers.js prototype gateway in
-`backend/`. It provides provider-only verification, confirmed certificate
-and event queries, and protected issuer write endpoints.
-
-```bash
-cd backend
-npm ci
-cp .env.example .env
-# Fill the gitignored file with the public contract/RPC configuration.
-# Add issuer credentials only when write operations are intentionally enabled.
-npm test
-npm start
-```
-
-The backend can run safely in read-only mode without an issuer private key or
-write API key. Its RPC must support historical `eth_getLogs` queries from
-deployment block `11318772`; otherwise direct verification remains available
-but certificate lists and event history report a degraded index.
-
-Writes fail closed unless the expected issuer address, test-only issuer key,
-and a server-side `WRITE_API_KEY` are configured. Every write also requires a
-unique `Idempotency-Key`. The single-process prototype persists these operation
-records in a gitignored local journal so a restart cannot silently resubmit an
-ambiguous write. The API key is a server-to-server prototype control and must
-never be embedded in frontend code. Current API configuration, security rules,
-requests, responses, and limitations are documented in
-[`docs/BACKEND_API.md`](docs/BACKEND_API.md) and
-[`docs/BACKEND_SAMPLES.md`](docs/BACKEND_SAMPLES.md).
-
-The issuer signer's Ethereum transaction nonce and the HTTP
-`Idempotency-Key` protect the gateway's optional server-side writes; they are
-separate from citizen SIWE challenges and application request reservations.
-`TRUST_PROXY` is disabled for local/direct use and is needed only when Express
-is deployed behind a known reverse proxy.
-
-## Prototype application and frontend
-
-The explicitly approved prototype application is implemented in
-`app-backend/` and `__frontend/`. It adds:
-
-- public browser-side file hashing or direct hash input and Sepolia verification;
-- wallet authentication through standard SIWE messages;
-- backend-derived administrator, issuer, citizen, and unlinked capabilities;
-- AES-256-GCM encrypted citizen, institution, request, and certificate
-  assignment fields in SQLite;
-- stable public institution IDs with approval-free citizen connections;
-- atomic `PENDING -> PROCESSING -> ISSUED` request handling;
-- issuer transactions signed directly in an injected browser wallet; and
-- administrator issuer authorization signed directly by the authenticated
-  administrator's injected browser wallet;
-- private citizen assignment views and hash-only verification QR codes.
-
-The blockchain proves certificate authenticity. The private database records
-citizen assignment. A wallet signature proves control of the assigned wallet.
-The contract does not store or prove citizen ownership, and loss of the
-private database loses that assignment.
-
-Installation, environment variables, service startup order, API endpoints,
-security rules, and limitations are documented in
-[`docs/FRONTEND_APPLICATION.md`](docs/FRONTEND_APPLICATION.md).
-
-## Document hashing
-
-Hash the exact raw certificate bytes with SHA-256 off-chain. The result must be
-32 bytes, represented for EVM calls as `0x` followed by 64 hexadecimal
-characters. Pass that digest directly as Solidity `bytes32`.
-
-Do not upload the document to the contract, hash a filename, use a JSON string
-unless it is the agreed canonical document representation, or replace SHA-256
-with Ethereum's Keccak-256. Every issuer and verifier must hash identical bytes
-to obtain the same identifier.
-
-## Privacy and security boundary
-
-Only the document hash, issuer address, issuance timestamp, revocation
-timestamp, and status are recorded. State and events must never contain the
-certificate contents, citizen identity, contact details, marks, or a detailed
-revocation reason. A hash is a fingerprint, not encryption; the original
-document remains off-chain and must be protected separately.
-
-The current contract is non-upgradeable, has no external calls, and uses
-OpenZeppelin `AccessControl`. Block timestamps are blockchain metadata and must
-not be treated as exact wall-clock proof.
-
-## Project structure
-
-```text
-contracts/PramaanChain.sol       Smart contract
-test/PramaanChain.test.js        Complete automated test suite
-backend/src/                     Sepolia backend gateway
-backend/test/                    Backend unit and API tests
-app-backend/src/                 Private SIWE and relationship service
-app-backend/test/                Application security and workflow tests
-__frontend/                      Public, issuer, and citizen React portal
-scripts/deploy.js                Local deployment-only script
-scripts/demo.js                  Checked local or Sepolia lifecycle demonstration
-docs/CONTRACT_DESIGN.md          Detailed contract specification
-docs/README.md                   Documentation index and status guide
-docs/BACKEND_API.md              Public gateway API and configuration
-docs/BACKEND_HANDOFF.md          Contract-to-gateway integration reference
-docs/FRONTEND_APPLICATION.md     Prototype application integration guide
-docs/FRONTEND_INTEGRATION.md     Implemented browser and wallet flows
-docs/STAGE8_DEMONSTRATION.md     Captured local execution evidence
-docs/STAGE9_VALIDATION.md        Clean-install and handoff validation evidence
-docs/SEPOLIA_PREPARATION.md      Stage 10 network and secret preparation
-docs/STAGE10_VALIDATION.md       Stage 10 local validation evidence
-docs/SEPOLIA_DEPLOYMENT.md       Stage 11 public testnet deployment evidence
-hardhat.config.js                Hardhat and Solidity configuration
-```
-
-## Deferred work
-
-Sepolia deployment and Etherscan verification are complete. The following
-remain deferred:
-
-- Ethereum mainnet or production EVM deployment;
-- production application hosting, database operations, backup, and recovery;
-- wallet recovery, address rotation, or certificate-file delivery;
-- document storage or on-chain citizen ownership proof;
-- production key management through KMS, HSM, or Vault;
-- production monitoring, multisignature control, and administrator recovery;
-- proxies, upgradeability, pausing, or batch issuance; and
-- zero-knowledge proofs.
-
-These require separate design and explicit authorization.
+The complete boundary is defined in
+[`docs/system-architecture.md`](docs/system-architecture.md).

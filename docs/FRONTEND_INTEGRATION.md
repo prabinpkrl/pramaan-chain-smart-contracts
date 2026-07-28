@@ -22,7 +22,8 @@ index are implemented in `backend/`.
 
 The frontend never receives a wallet private key, credentialed RPC URL,
 `WRITE_API_KEY`, or `APP_DATA_ENCRYPTION_KEY`. Administrator, issuer, and
-citizen users sign only through an injected browser wallet.
+citizen users sign through the selected EIP-6963 browser provider or a
+WalletConnect-compatible mobile wallet.
 
 The gateway's optional `/api/write/*` routes remain server-side integration
 interfaces. The current frontend does not call them. Issuer and administrator
@@ -33,7 +34,8 @@ the application backend or read-only gateway.
 
 Wallet connection and application authentication are intentionally separate:
 
-1. The user connects an injected wallet.
+1. The user selects a discovered browser wallet or opens a WalletConnect
+   mobile session.
 2. The login page displays the selected address, current network, and optional
    balance.
 3. The user may change the exposed account. If needed, the frontend can
@@ -66,7 +68,7 @@ An administrator provisions an institution through the admin portal:
 
 1. Enter an institution name, stable public ID, and primary issuer wallet.
 2. If the primary wallet is not already authorized, sign
-   `authorizeIssuer(address)` with the administrator's browser wallet.
+   `authorizeIssuer(address)` with the administrator's selected wallet.
 3. Wait for a successful receipt and verify the resulting issuer status
    through the read-only gateway.
 4. Register the institution and encrypted primary issuer membership in the
@@ -127,7 +129,7 @@ The issuance sequence is:
 PENDING
   -> POST /api/issuer/requests/:id/prepare-issuance
 PROCESSING
-  -> injected wallet signs issueCertificate(documentHash)
+  -> selected wallet signs issueCertificate(documentHash)
   -> POST /api/issuer/requests/:id/confirm-issuance
 ISSUED
 ```

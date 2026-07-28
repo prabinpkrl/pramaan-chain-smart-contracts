@@ -75,7 +75,7 @@ know that chain.
   encrypted private application backend. Citizens connect to one or more
   institutions using stable public IDs; no approval or shared secret is used.
 - Issuers prepare a request in the private backend, sign the exact hash with
-  their injected wallet, and send the transaction hash back for independent
+  their selected wallet, and send the transaction hash back for independent
   receipt validation.
 - QR codes contain only `/verify/<documentHash>` public URLs.
 - Issuer authorization is signed directly by the authenticated administrator

@@ -32,12 +32,12 @@ read-only blockchain lookup as file-based verification.
 | `__frontend/` | `http://localhost:5173` | Public verifier, issuer portal, citizen portal |
 
 The frontend never receives `WRITE_API_KEY`, `SEPOLIA_RPC_URL`, private keys,
-or `APP_DATA_ENCRYPTION_KEY`. Issuer writes are signed directly by an injected
-browser wallet. The blockchain gateway's protected write routes are not used
-by this frontend.
+or `APP_DATA_ENCRYPTION_KEY`. Issuer writes are signed directly by the
+selected browser or WalletConnect mobile provider. The blockchain gateway's
+protected write routes are not used by this frontend.
 
 Administrator issuer authorization is also signed directly by the currently
-authenticated administrator's injected wallet. The frontend waits for the
+authenticated administrator's selected wallet. The frontend waits for the
 receipt and verifies the resulting issuer status through the read-only
 gateway. No administrator private key is loaded into either backend. Issuer
 removal remains outside the prototype UI. After authorization, the
@@ -111,6 +111,10 @@ npm run dev
 All `VITE_*` values are public browser configuration. No secret name or value
 belongs in the frontend environment.
 
+Set `VITE_WALLETCONNECT_PROJECT_ID` to a public Reown project ID when
+mobile-wallet QR login is required. Leave it blank for browser-extension-only
+development.
+
 `npm run test:e2e` runs deterministic desktop and mobile browser journeys with
 mocked wallet and service boundaries. `npm run test:e2e:live` starts the
 existing blockchain gateway, a temporary-database application backend, and
@@ -120,13 +124,14 @@ must never be expanded to issue, revoke, authorize, or remove an issuer.
 
 ## Authentication and roles
 
-The login screen separates wallet connection from authentication. It first
-connects the injected browser wallet and displays the selected public address,
-current chain, and optional balance. Balance lookup is presentational and
-cannot block login. The user can change the exposed account and the frontend
-can request or add the public Sepolia network metadata. Only the subsequent
-SIWE signature creates an application session; connecting a wallet alone does
-not assign a role or authenticate the user.
+The login screen separates wallet connection from authentication. It discovers
+EIP-6963 browser providers, falls back to legacy `window.ethereum`, and offers
+WalletConnect mobile login when configured. It displays the selected public
+address, current chain, and optional balance. Balance lookup is presentational
+and cannot block login. The user can change the exposed account and the
+frontend can request or add the public Sepolia network metadata. Only the
+subsequent SIWE signature creates an application session; connecting a wallet
+alone does not assign a role or authenticate the user.
 
 The nonce request contains only the public wallet address. The frontend cannot
 select a trusted role. After validating the EIP-4361 SIWE message and

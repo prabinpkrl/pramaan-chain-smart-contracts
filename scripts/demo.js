@@ -43,7 +43,7 @@ if (authorizationReceipt === null) {
 
 const syntheticLabel =
   networkName === "sepolia"
-    ? "PramaanChain Stage 11 Sepolia synthetic certificate"
+    ? "PramaanChain independent Sepolia synthetic certificate"
     : "PramaanChain Stage 8 synthetic certificate";
 const documentHash = ethers.sha256(ethers.toUtf8Bytes(syntheticLabel));
 const issuanceTransaction = await contract
@@ -88,6 +88,7 @@ console.log(
       administrator: administratorAddress,
       issuer: issuerAddress,
       contractAddress: await contract.getAddress(),
+      deploymentBlockNumber: deploymentReceipt.blockNumber,
       sampleDocumentHash: documentHash,
       transactions: {
         deployment: deploymentReceipt.hash,

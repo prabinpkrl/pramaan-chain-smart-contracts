@@ -10,6 +10,8 @@ guides for present-day setup and integration.
 | Document | Purpose |
 | --- | --- |
 | [`../README.md`](../README.md) | Repository overview, setup, roles, deployment identity, and boundaries |
+| [`demo.md`](demo.md) | Fresh-clone independent Sepolia deployment and full npm application startup |
+| [`system-architecture.md`](system-architecture.md) | Architecture source of truth, trust boundaries, actors, and flows |
 | [`CONTRACT_DESIGN.md`](CONTRACT_DESIGN.md) | Contract interface, roles, errors, events, and state transitions |
 | [`BACKEND_API.md`](BACKEND_API.md) | Public blockchain gateway configuration and REST API |
 | [`BACKEND_SAMPLES.md`](BACKEND_SAMPLES.md) | Gateway request and response examples |
@@ -19,9 +21,9 @@ guides for present-day setup and integration.
 | [`CRYPTOGRAPHY_ENGINE.md`](CRYPTOGRAPHY_ENGINE.md) | Cryptographic and blockchain service boundary |
 | [`../__frontend/README.md`](../__frontend/README.md) | Frontend-specific setup and trust boundaries |
 
-The architecture source of truth is the workspace-level
-`system-architecture.md`, located beside the `blockchain/` repository. It is
-maintained with these guides but is not part of this Git repository.
+The architecture source of truth is
+[`system-architecture.md`](system-architecture.md) and is versioned with the
+implementation it describes.
 
 ## Historical evidence
 
