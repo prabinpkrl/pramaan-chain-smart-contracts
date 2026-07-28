@@ -131,7 +131,7 @@ export async function connectMobileWallet(projectId) {
       name: "PramaanChain",
       description: "Ethereum certificate proof verification and workspace access",
       url: window.location.origin,
-      icons: [`${window.location.origin}/favicon.svg`],
+      icons: [`${window.location.origin}/Logo-icon.png`],
     },
   });
 

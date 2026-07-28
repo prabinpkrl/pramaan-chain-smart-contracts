@@ -220,7 +220,7 @@ function Login() {
       <section className="relative hidden min-h-screen overflow-hidden border-r border-[var(--border)] p-10 lg:flex lg:flex-col xl:p-12">
         <AnimatedGrid />
         <div className="relative z-10">
-          <Brand />
+          <Brand variant="full" />
         </div>
 
         <div className="relative z-10 grid min-h-0 flex-1 grid-rows-[minmax(300px,1fr)_auto]">
