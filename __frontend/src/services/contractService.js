@@ -1,5 +1,6 @@
 import { BrowserProvider, Contract, ZeroAddress, getAddress } from "ethers";
 import { config } from "../config";
+import { getActiveWalletProvider } from "../utils/walletProvider";
 
 const ABI = [
   "function issueCertificate(bytes32 documentHash)",
@@ -21,11 +22,12 @@ export function validateIssuerAddress(value) {
 }
 
 async function signerFor(expectedAddress) {
-  if (!window.ethereum) throw new Error("A compatible browser wallet is required");
-  const provider = new BrowserProvider(window.ethereum);
+  const walletProvider = getActiveWalletProvider();
+  if (!walletProvider) throw new Error("A compatible wallet connection is required");
+  const provider = new BrowserProvider(walletProvider);
   let network = await provider.getNetwork();
   if (Number(network.chainId) !== config.chainId) {
-    await window.ethereum.request({
+    await walletProvider.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: `0x${config.chainId.toString(16)}` }],
     });

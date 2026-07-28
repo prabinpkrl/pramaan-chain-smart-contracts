@@ -8,7 +8,7 @@ administrator, issuer, citizen, and unlinked-wallet views from one build.
 The interface uses a restrained Ethereum-inspired visual system: neutral
 near-black surfaces, crisp borders, one violet interaction accent, clear
 status colors, and no decorative gradients. Motion is short and purposeful.
-The landing page's proof crystal is an optional, lazy-loaded WebGL enhancement
+The landing page's Proof Chamber is an optional, lazy-loaded WebGL enhancement
 with a lightweight SVG fallback; portal workflows remain conventional,
 responsive, and keyboard accessible.
 
@@ -34,6 +34,17 @@ All `VITE_*` settings are public browser configuration. Never add RPC
 credentials, API keys, application encryption keys, or wallet private keys to
 this directory.
 
+Mobile QR login additionally requires a public WalletConnect project ID:
+
+1. Create a project at <https://cloud.reown.com/>.
+2. Set `VITE_WALLETCONNECT_PROJECT_ID` in the local `.env` or deployment
+   environment.
+3. Restart or rebuild the frontend so Vite includes the public project ID.
+
+The project ID identifies the application to the WalletConnect relay; it is not
+a wallet secret. Wallet seed phrases and private keys must never be entered
+into PramaanChain configuration.
+
 ## Authentication and roles
 
 Wallet sign-in uses a backend-generated EIP-4361 SIWE challenge. The
@@ -42,11 +53,18 @@ application backend validates the signature and derives `ADMIN`, `ISSUER`,
 roles. An HttpOnly session cookie and CSRF token protect private operations.
 Multi-role wallets can switch portals from the header.
 
-The login screen first connects the injected browser wallet and displays its
-address, network, and balance. Wallet connection alone is not login: the user
-must separately sign the backend's one-time SIWE message. The frontend can
-request Sepolia or add its public network metadata when the wallet does not
-already know that chain.
+The login screen discovers installed extensions through EIP-6963 and shows a
+wallet chooser when more than one provider is available. Legacy
+`window.ethereum` providers remain a fallback. WalletConnect provides QR and
+mobile-app login for compatible wallets when
+`VITE_WALLETCONNECT_PROJECT_ID` is configured.
+
+After connection, the selected browser or mobile provider displays its
+address, network, and balance and remains the active provider for authorized
+contract actions. Wallet connection alone is not login: the user must
+separately sign the backend's one-time SIWE message. The frontend can request
+Sepolia or add its public network metadata when the wallet does not already
+know that chain.
 
 ## Trust boundaries
 

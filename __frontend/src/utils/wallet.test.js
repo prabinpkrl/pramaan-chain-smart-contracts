@@ -1,7 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mobileMocks = vi.hoisted(() => ({
+  init: vi.fn(),
+}));
+
+vi.mock("@walletconnect/ethereum-provider", () => ({
+  EthereumProvider: {
+    init: mobileMocks.init,
+  },
+}));
+
 import {
   SEPOLIA_CHAIN_ID,
   chooseWalletAccount,
+  connectMobileWallet,
   connectWallet,
   formatWalletBalance,
   requestNetworkSwitch,
@@ -9,6 +21,7 @@ import {
 
 describe("wallet connection helpers", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     Object.defineProperty(window, "ethereum", {
       configurable: true,
       value: undefined,
@@ -87,5 +100,60 @@ describe("wallet connection helpers", () => {
       chainId: SEPOLIA_CHAIN_ID,
       balance: null,
     });
+  });
+
+  it("uses the explicitly selected browser provider", async () => {
+    const selectedAddress = "0x1234567890123456789012345678901234567890";
+    const fallbackRequest = vi.fn();
+    const selectedRequest = vi.fn()
+      .mockResolvedValueOnce([selectedAddress])
+      .mockResolvedValueOnce(SEPOLIA_CHAIN_ID)
+      .mockResolvedValueOnce("0x0");
+    window.ethereum = { request: fallbackRequest };
+
+    await expect(connectWallet({ request: selectedRequest })).resolves.toMatchObject({
+      address: selectedAddress,
+      chainId: SEPOLIA_CHAIN_ID,
+    });
+    expect(fallbackRequest).not.toHaveBeenCalled();
+  });
+
+  it("requires deployment configuration before opening mobile QR", async () => {
+    await expect(connectMobileWallet("")).rejects.toThrow(
+      "WALLETCONNECT_NOT_CONFIGURED",
+    );
+    expect(mobileMocks.init).not.toHaveBeenCalled();
+  });
+
+  it("opens WalletConnect and returns the selected mobile account", async () => {
+    const address = "0x1234567890123456789012345678901234567890";
+    const provider = {
+      accounts: [address],
+      connect: vi.fn().mockResolvedValue(undefined),
+      request: vi.fn()
+        .mockResolvedValueOnce(SEPOLIA_CHAIN_ID)
+        .mockResolvedValueOnce("0x0"),
+    };
+    mobileMocks.init.mockResolvedValue(provider);
+
+    await expect(connectMobileWallet("synthetic-project-id")).resolves.toMatchObject({
+      provider,
+      info: {
+        name: "Mobile wallet",
+        rdns: "network.walletconnect",
+      },
+      wallet: {
+        address,
+        chainId: SEPOLIA_CHAIN_ID,
+        balance: "0",
+      },
+    });
+    expect(mobileMocks.init).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: "synthetic-project-id",
+      chains: [11155111],
+      optionalChains: [11155111],
+      showQrModal: true,
+    }));
+    expect(provider.connect).toHaveBeenCalledOnce();
   });
 });

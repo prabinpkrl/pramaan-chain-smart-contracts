@@ -1,15 +1,17 @@
 import { appApi, setCsrfToken } from "./api";
+import { getActiveWalletProvider } from "../utils/walletProvider";
 
-export async function connectWalletAndSignIn() {
-  if (!window.ethereum) {
-    throw new Error("Install MetaMask, Rabby, or another compatible browser wallet");
+export async function connectWalletAndSignIn(provider) {
+  const selectedProvider = provider || getActiveWalletProvider();
+  if (!selectedProvider || typeof selectedProvider.request !== "function") {
+    throw new Error("Connect a browser or mobile wallet first");
   }
-  const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+  const accounts = await selectedProvider.request({ method: "eth_requestAccounts" });
   const address = accounts[0];
   if (!address) throw new Error("The wallet did not provide an account");
 
   const challenge = await appApi.post("/auth/nonce", { address });
-  const signature = await window.ethereum.request({
+  const signature = await selectedProvider.request({
     method: "personal_sign",
     params: [challenge.data.message, address],
   });

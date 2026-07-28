@@ -4,6 +4,11 @@ import {
   getSession,
   logout as logoutRequest,
 } from "../services/authService";
+import {
+  clearActiveWalletProvider,
+  getActiveWalletProvider,
+  setActiveWalletProvider,
+} from "../utils/walletProvider";
 import AuthContext from "./authContextStore";
 
 const ROLE_PRIORITY = ["ADMIN", "ISSUER", "CITIZEN", "UNLINKED"];
@@ -17,6 +22,9 @@ export function AuthProvider({ children }) {
   const [activeRole, setActiveRoleState] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [walletProvider, setWalletProviderState] = useState(
+    () => getActiveWalletProvider(),
+  );
 
   const applySession = useCallback((next) => {
     setSession(next);
@@ -42,24 +50,27 @@ export function AuthProvider({ children }) {
   }, [applySession]);
 
   useEffect(() => {
-    if (!window.ethereum) return undefined;
+    const provider = walletProvider || getActiveWalletProvider();
+    if (!provider) return undefined;
     const reset = () => {
       applySession(null);
       logoutRequest().catch(() => undefined);
     };
-    window.ethereum.on?.("accountsChanged", reset);
-    window.ethereum.on?.("chainChanged", reset);
+    provider.on?.("accountsChanged", reset);
+    provider.on?.("chainChanged", reset);
     return () => {
-      window.ethereum.removeListener?.("accountsChanged", reset);
-      window.ethereum.removeListener?.("chainChanged", reset);
+      provider.removeListener?.("accountsChanged", reset);
+      provider.removeListener?.("chainChanged", reset);
     };
-  }, [applySession]);
+  }, [applySession, walletProvider]);
 
-  const signIn = useCallback(async () => {
+  const signIn = useCallback(async (provider) => {
     setLoading(true);
     setError(null);
     try {
-      const next = await connectWalletAndSignIn();
+      setActiveWalletProvider(provider);
+      setWalletProviderState(provider);
+      const next = await connectWalletAndSignIn(provider);
       applySession(next);
       return next;
     } catch (err) {
@@ -74,6 +85,8 @@ export function AuthProvider({ children }) {
     try {
       await logoutRequest();
     } finally {
+      clearActiveWalletProvider();
+      setWalletProviderState(null);
       applySession(null);
     }
   }, [applySession]);
@@ -92,9 +105,20 @@ export function AuthProvider({ children }) {
       logout,
       refresh,
       setActiveRole,
+      walletProvider,
       address: session?.address || null,
     }),
-    [session, activeRole, loading, error, signIn, logout, refresh, setActiveRole],
+    [
+      session,
+      activeRole,
+      loading,
+      error,
+      signIn,
+      logout,
+      refresh,
+      setActiveRole,
+      walletProvider,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

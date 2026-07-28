@@ -143,6 +143,65 @@ textarea:focus-visible {
     font-variant-ligatures: none;
   }
 
+  .proof-hero {
+    background-color: var(--canvas);
+  }
+
+  .proof-hero::before,
+  .proof-hero::after {
+    position: absolute;
+    left: 50%;
+    top: 42%;
+    z-index: -1;
+    width: min(72vw, 68rem);
+    aspect-ratio: 1;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    content: "";
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+  }
+
+  .proof-hero::after {
+    width: min(54vw, 51rem);
+    border-color: #211d37;
+  }
+
+  .proof-hero-rule {
+    position: absolute;
+    bottom: 0;
+    top: 0;
+    width: 1px;
+    background-color: var(--border);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .proof-hero-rule-left {
+    left: calc(50% - min(42vw, 36rem));
+  }
+
+  .proof-hero-rule-right {
+    right: calc(50% - min(42vw, 36rem));
+  }
+
+  .proof-annotation {
+    position: absolute;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.16em;
+    line-height: 1.8;
+    color: var(--accent-strong);
+  }
+
+  .proof-annotation span {
+    color: var(--text-dim);
+  }
+
+  .proof-console {
+    box-shadow: 0 34px 90px rgb(0 0 0 / 46%);
+  }
+
 }
 
 @media (min-width: 40rem) {

@@ -92,6 +92,82 @@ export async function installWallet(page, {
   }, { account: address, initialChain: chainId, initiallyConnected: connected });
 }
 
+export async function installMultipleWallets(page) {
+  await page.addInitScript(({ addresses }) => {
+    const makeProvider = (account, flags = {}) => {
+      const listeners = new Map();
+      const state = {
+        account,
+        chainId: "0x1",
+        connected: false,
+      };
+      const emit = (event, value) => {
+        for (const handler of listeners.get(event) || []) handler(value);
+      };
+
+      return {
+        ...flags,
+        request: async ({ method }) => {
+          if (method === "eth_accounts") return state.connected ? [state.account] : [];
+          if (method === "eth_requestAccounts") {
+            state.connected = true;
+            emit("accountsChanged", [state.account]);
+            return [state.account];
+          }
+          if (method === "eth_chainId") return state.chainId;
+          if (method === "eth_getBalance") return "0x0";
+          if (method === "wallet_switchEthereumChain" || method === "wallet_addEthereumChain") {
+            state.chainId = "0xaa36a7";
+            emit("chainChanged", state.chainId);
+            return null;
+          }
+          if (method === "wallet_requestPermissions") return [{ parentCapability: "eth_accounts" }];
+          if (method === "personal_sign") return `0x${"2".repeat(130)}`;
+          throw Object.assign(new Error(`Unsupported E2E wallet method: ${method}`), { code: -32601 });
+        },
+        on: (event, handler) => {
+          const handlers = listeners.get(event) || [];
+          handlers.push(handler);
+          listeners.set(event, handlers);
+        },
+        removeListener: (event, handler) => {
+          listeners.set(event, (listeners.get(event) || []).filter((item) => item !== handler));
+        },
+      };
+    };
+
+    const metamask = makeProvider(addresses.admin, { isMetaMask: true });
+    const rabby = makeProvider(addresses.issuer, { isRabby: true });
+    const announcements = [
+      {
+        info: {
+          uuid: "e2e-metamask",
+          name: "MetaMask",
+          icon: "",
+          rdns: "io.metamask",
+        },
+        provider: metamask,
+      },
+      {
+        info: {
+          uuid: "e2e-rabby",
+          name: "Rabby Wallet",
+          icon: "",
+          rdns: "io.rabby",
+        },
+        provider: rabby,
+      },
+    ];
+
+    window.ethereum = metamask;
+    window.addEventListener("eip6963:requestProvider", () => {
+      for (const detail of announcements) {
+        window.dispatchEvent(new CustomEvent("eip6963:announceProvider", { detail }));
+      }
+    });
+  }, { addresses: ADDRESSES });
+}
+
 function verification(status = "ACTIVE") {
   return {
     status,

@@ -1,22 +1,22 @@
-/**
- * Thin wrapper around the injected MetaMask provider (window.ethereum).
- * Kept dependency-free on purpose: the frontend only ever needs an address
- * and a chain id, never a signer, so pulling in ethers/wagmi here would be
- * unnecessary weight for a login screen.
- */
+import { getActiveWalletProvider } from "./walletProvider";
 
 export const SEPOLIA_CHAIN_ID = "0xaa36a7"; // 11155111
+const SEPOLIA_CHAIN_NUMBER = 11155111;
 const WEI_PER_ETH = 10n ** 18n;
 
-export function isMetaMaskInstalled() {
+export function hasInjectedWallet() {
   return typeof window !== "undefined" && Boolean(window.ethereum);
 }
 
-function requireWallet() {
-  if (!isMetaMaskInstalled() || typeof window.ethereum.request !== "function") {
-    throw new Error("METAMASK_NOT_INSTALLED");
+// Retained as a compatibility alias for existing imports.
+export const isMetaMaskInstalled = hasInjectedWallet;
+
+function requireWallet(provider) {
+  const selected = provider || getActiveWalletProvider();
+  if (!selected || typeof selected.request !== "function") {
+    throw new Error("WALLET_NOT_AVAILABLE");
   }
-  return window.ethereum;
+  return selected;
 }
 
 export function formatWalletBalance(value) {
@@ -30,12 +30,12 @@ export function formatWalletBalance(value) {
   return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 
-export async function getWalletSnapshot(address) {
-  const provider = requireWallet();
-  const chainId = await provider.request({ method: "eth_chainId" });
+export async function getWalletSnapshot(address, provider) {
+  const selected = requireWallet(provider);
+  const chainId = await selected.request({ method: "eth_chainId" });
   let balance = null;
   try {
-    balance = formatWalletBalance(await provider.request({
+    balance = formatWalletBalance(await selected.request({
       method: "eth_getBalance",
       params: [address, "latest"],
     }));
@@ -49,9 +49,9 @@ export async function getWalletSnapshot(address) {
   };
 }
 
-export async function connectWallet() {
-  const provider = requireWallet();
-  const accounts = await provider.request({
+export async function connectWallet(provider) {
+  const selected = requireWallet(provider);
+  const accounts = await selected.request({
     method: "eth_requestAccounts",
   });
 
@@ -59,43 +59,44 @@ export async function connectWallet() {
     throw new Error("NO_ACCOUNTS_RETURNED");
   }
 
-  return getWalletSnapshot(accounts[0]);
+  return getWalletSnapshot(accounts[0], selected);
 }
 
-export async function chooseWalletAccount() {
-  const provider = requireWallet();
+export async function chooseWalletAccount(provider) {
+  const selected = requireWallet(provider);
   try {
-    await provider.request({
+    await selected.request({
       method: "wallet_requestPermissions",
       params: [{ eth_accounts: {} }],
     });
   } catch (error) {
     if (error.code !== -32601 && error.code !== 4200) throw error;
   }
-  return connectWallet();
+  return connectWallet(selected);
 }
 
-export async function getConnectedAccounts() {
-  if (!isMetaMaskInstalled()) return [];
+export async function getConnectedAccounts(provider) {
+  const selected = provider || getActiveWalletProvider();
+  if (!selected || typeof selected.request !== "function") return [];
 
   try {
-    return await window.ethereum.request({ method: "eth_accounts" });
+    return await selected.request({ method: "eth_accounts" });
   } catch {
     return [];
   }
 }
 
-export async function requestNetworkSwitch() {
-  const provider = requireWallet();
+export async function requestNetworkSwitch(provider) {
+  const selected = requireWallet(provider);
 
   try {
-    await provider.request({
+    await selected.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: SEPOLIA_CHAIN_ID }],
     });
   } catch (error) {
     if (error.code !== 4902) throw error;
-    await provider.request({
+    await selected.request({
       method: "wallet_addEthereumChain",
       params: [{
         chainId: SEPOLIA_CHAIN_ID,
@@ -110,6 +111,48 @@ export async function requestNetworkSwitch() {
       }],
     });
   }
+}
+
+export async function connectMobileWallet(projectId) {
+  if (!projectId) {
+    throw new Error("WALLETCONNECT_NOT_CONFIGURED");
+  }
+
+  const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
+  const provider = await EthereumProvider.init({
+    projectId,
+    chains: [SEPOLIA_CHAIN_NUMBER],
+    optionalChains: [SEPOLIA_CHAIN_NUMBER],
+    showQrModal: true,
+    rpcMap: {
+      [SEPOLIA_CHAIN_NUMBER]: "https://rpc.sepolia.org",
+    },
+    metadata: {
+      name: "PramaanChain",
+      description: "Ethereum certificate proof verification and workspace access",
+      url: window.location.origin,
+      icons: [`${window.location.origin}/favicon.svg`],
+    },
+  });
+
+  await provider.connect();
+  const accounts = provider.accounts?.length
+    ? provider.accounts
+    : await provider.request({ method: "eth_accounts" });
+  if (!accounts?.[0]) {
+    throw new Error("NO_ACCOUNTS_RETURNED");
+  }
+
+  return {
+    provider,
+    wallet: await getWalletSnapshot(accounts[0], provider),
+    info: {
+      uuid: "walletconnect-mobile",
+      name: "Mobile wallet",
+      icon: "",
+      rdns: "network.walletconnect",
+    },
+  };
 }
 
 export function shortenAddress(address, chars = 4) {

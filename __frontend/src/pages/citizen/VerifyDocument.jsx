@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
 import toast from "react-hot-toast";
 import {
   CheckCircle2,
@@ -20,12 +20,13 @@ import { verifyDocument } from "../../services/documentService";
 import { hashDocument } from "../../utils/hashDocument";
 import { addVerificationEntry } from "../../utils/verificationHistory";
 import { isValidDocumentHash } from "../../utils/validateHash";
-
-const ACCEPTED_TYPES = ".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt,.csv,.xlsx,.zip";
+import { ACCEPTED_DOCUMENT_TYPES } from "../../utils/verificationInput";
 
 function VerifyDocument() {
   const { documentHash: routeHash } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
+  const routeDocumentName = location.state?.documentName || "Shared proof";
   const [hashInput, setHashInput] = useState(routeHash || "");
   const [selectedFile, setSelectedFile] = useState(null);
   const [result, setResult] = useState(null);
@@ -71,10 +72,10 @@ function VerifyDocument() {
         setResult({
           ...response,
           documentHash: routeHash,
-          documentName: "Shared proof",
+          documentName: routeDocumentName,
         });
         addVerificationEntry({
-          documentName: "Shared proof",
+          documentName: routeDocumentName,
           documentHash: routeHash,
           status: response.status,
           issuer: response.issuer,
@@ -83,7 +84,7 @@ function VerifyDocument() {
       })
       .catch((error) => toast.error(apiErrorMessage(error)))
       .finally(() => setLoading(false));
-  }, [routeHash]);
+  }, [routeDocumentName, routeHash]);
 
   const handleVerifyFile = async () => {
     if (!selectedFile) {
@@ -205,7 +206,7 @@ function VerifyDocument() {
                 <input
                   id="verificationFile"
                   type="file"
-                  accept={ACCEPTED_TYPES}
+                  accept={ACCEPTED_DOCUMENT_TYPES}
                   onChange={(event) => {
                     setSelectedFile(event.target.files[0] || null);
                     setResult(null);

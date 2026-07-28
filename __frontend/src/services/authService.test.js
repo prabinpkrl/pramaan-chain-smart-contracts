@@ -48,7 +48,9 @@ describe("wallet authentication service", () => {
   });
 
   it("fails locally without an injected wallet", async () => {
-    await expect(connectWalletAndSignIn()).rejects.toThrow("Install MetaMask");
+    await expect(connectWalletAndSignIn()).rejects.toThrow(
+      "Connect a browser or mobile wallet first",
+    );
     expect(mocks.post).not.toHaveBeenCalled();
   });
 

@@ -17,4 +17,5 @@ export const config = Object.freeze({
   etherscanBaseUrl:
     import.meta.env.VITE_ETHERSCAN_BASE_URL || "https://sepolia.etherscan.io",
   publicAppUrl: import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin,
+  walletConnectProjectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || "",
 });
