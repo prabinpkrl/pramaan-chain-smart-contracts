@@ -1,4 +1,5 @@
 import DashboardLayout from "../../components/layout/DashboardLayout";
+import PageHeader from "../../components/common/PageHeader";
 import { useAuth } from "../../context/useAuth";
 import { config } from "../../config";
 
@@ -7,30 +8,34 @@ function Profile() {
 
   return (
     <DashboardLayout>
-      <h1 className="text-3xl font-bold mb-6">Issuer Profile</h1>
+      <PageHeader
+        eyebrow="Wallet and network"
+        title="Issuer profile"
+        description="Review the authenticated wallet, institution memberships, Sepolia network, and contract reference."
+      />
 
-      <div className="bg-white rounded-xl shadow p-8 max-w-4xl">
-        <h2 className="text-xl font-semibold mb-6 border-b pb-3">
+      <div className="app-panel max-w-4xl p-5 sm:p-7 lg:p-8">
+        <h2 className="mb-5 border-b pb-4 text-xl font-semibold sm:mb-6">
           Issuer Authorization
         </h2>
 
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
           <div>
             <p className="text-gray-500 text-sm">Wallet Status</p>
-            <p className="font-semibold text-green-600">🟢 Connected</p>
+            <p className="font-semibold text-[var(--accent-strong)]">Connected</p>
           </div>
 
           <div>
             <p className="text-gray-500 text-sm">Authorization Status</p>
             <p className="font-semibold">
               {session.roles.includes("ISSUER")
-                ? "🟢 Authorized issuer"
-                : "🔴 Not authorized"}
+                ? "Authorized issuer"
+                : "Not authorized"}
             </p>
           </div>
         </div>
 
-        <h2 className="text-xl font-semibold mt-10 mb-6 border-b pb-3">
+        <h2 className="mb-5 mt-8 border-b pb-4 text-xl font-semibold sm:mb-6 sm:mt-10">
           Blockchain Information
         </h2>
 
@@ -56,7 +61,7 @@ function Profile() {
 
           <div>
             <p className="text-gray-500 text-sm">Institution memberships</p>
-            <ul className="mt-2 space-y-2">
+            <ul className="mt-3 space-y-3">
               {session.issuerMemberships.map((institution) => (
                 <li key={institution.id} className="rounded-lg bg-gray-100 p-3">
                   <span className="font-semibold">{institution.name}</span>

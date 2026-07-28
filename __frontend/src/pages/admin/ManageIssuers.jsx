@@ -4,8 +4,11 @@ import { Building2, Search } from "lucide-react";
 
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
+import ConfirmModal from "../../components/common/ConfirmModal";
 import EtherscanLink from "../../components/common/EtherscanLink";
 import Input from "../../components/common/Input";
+import PageHeader from "../../components/common/PageHeader";
+import TransactionProgress from "../../components/common/TransactionProgress";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { useAuth } from "../../context/useAuth";
 import { apiErrorMessage } from "../../services/api";
@@ -32,6 +35,8 @@ function ManageIssuers() {
   const [provisioning, setProvisioning] = useState(false);
   const [authorizationTxHash, setAuthorizationTxHash] = useState("");
   const [authorizationVerified, setAuthorizationVerified] = useState(false);
+  const [pendingProvision, setPendingProvision] = useState(null);
+  const [transactionStep, setTransactionStep] = useState("");
 
   const loadInstitutions = useCallback(async () => {
     setInstitutions(await listAdminInstitutions());
@@ -78,17 +83,22 @@ function ManageIssuers() {
       return;
     }
 
+    setPendingProvision({
+      publicId: normalizedPublicId,
+      name: institutionName.trim(),
+      issuerAddress: normalizedIssuer,
+    });
+  };
+
+  const provision = async ({ publicId: normalizedPublicId, name, issuerAddress: normalizedIssuer }) => {
     setProvisioning(true);
     setAuthorizationTxHash("");
     setAuthorizationVerified(false);
+    setTransactionStep("check");
     try {
       let issuerStatus = await checkIssuer(normalizedIssuer);
       if (!issuerStatus.authorized) {
-        if (
-          !window.confirm(
-            `Authorize ${normalizedIssuer} as the primary issuer for ${normalizedPublicId} on Sepolia?`,
-          )
-        ) return;
+        setTransactionStep("wallet");
         const transactionHash = await authorizeIssuerOnChain(
           normalizedIssuer,
           session.address,
@@ -103,9 +113,10 @@ function ManageIssuers() {
       }
       setAuthorizationVerified(true);
 
+      setTransactionStep("register");
       const institution = await registerInstitution(
         normalizedPublicId,
-        institutionName.trim(),
+        name,
         normalizedIssuer,
       );
       await loadInstitutions();
@@ -119,6 +130,7 @@ function ManageIssuers() {
       toast.error(apiErrorMessage(error));
     } finally {
       setProvisioning(false);
+      setTransactionStep("");
     }
   };
 
@@ -133,11 +145,15 @@ function ManageIssuers() {
 
   return (
     <DashboardLayout>
-      <h1 className="mb-6 text-3xl font-bold">Institutions and Issuers</h1>
+      <PageHeader
+        eyebrow="Administrator controls"
+        title="Institutions and issuers"
+        description="Check an issuer’s current role, authorize a primary wallet when required, and register its private institution membership."
+      />
 
-      <section className="mb-8 rounded-xl bg-white p-6 shadow">
+      <section className="app-panel panel-padding section-spacing">
         <h2 className="mb-4 text-xl font-semibold">Check Issuer Authorization</h2>
-        <form onSubmit={handleLookup} className="flex items-end gap-4">
+        <form onSubmit={handleLookup} className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
           <div className="flex-1">
             <Input
               id="issuerLookup"
@@ -153,14 +169,14 @@ function ManageIssuers() {
           </Button>
         </form>
         {lookupResult && (
-          <div className="mt-4 flex items-center gap-3">
-            <span className="font-mono text-sm">{lookupResult.address}</span>
+          <div className="mt-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+            <span className="break-all font-mono text-sm">{lookupResult.address}</span>
             <Badge status={lookupResult.authorized ? "AUTHORIZED" : "UNAUTHORIZED"} />
           </div>
         )}
       </section>
 
-      <section className="mb-8 rounded-xl bg-white p-6 shadow">
+      <section className="app-panel panel-padding section-spacing">
         <h2 className="mb-2 text-xl font-semibold">Create Institution</h2>
         <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           The public ID is permanent and shareable, for example{" "}
@@ -168,7 +184,7 @@ function ManageIssuers() {
           authorization transaction. The primary issuer wallet is then
           registered privately with the institution.
         </div>
-        <form onSubmit={handleProvision} className="grid gap-2 lg:grid-cols-2">
+        <form onSubmit={handleProvision} className="grid gap-x-4 lg:grid-cols-2">
           <Input
             id="institutionName"
             label="Institution Name"
@@ -222,12 +238,12 @@ function ManageIssuers() {
         )}
       </section>
 
-      <section className="rounded-xl bg-white p-6 shadow">
+      <section className="app-panel panel-padding">
         <h2 className="mb-4 text-xl font-semibold">Registered Institutions</h2>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
           {institutions.map((institution) => (
-            <article key={institution.id} className="rounded-lg border p-5">
-              <div className="flex items-start justify-between gap-4">
+            <article key={institution.id} className="rounded-xl border bg-[var(--surface-raised)] p-4 sm:p-5">
+              <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
                 <div>
                   <h3 className="text-lg font-semibold">{institution.name}</h3>
                   <button
@@ -250,6 +266,30 @@ function ManageIssuers() {
           )}
         </div>
       </section>
+      <ConfirmModal
+        isOpen={Boolean(pendingProvision)}
+        title="Authorize and register institution?"
+        message={`Confirm ${pendingProvision?.name || ""} (${pendingProvision?.publicId || ""}) with primary issuer ${pendingProvision?.issuerAddress || ""}. If authorization is missing, your administrator wallet will send one Sepolia transaction.`}
+        confirmText="Authorize and register"
+        confirmVariant="primary"
+        onCancel={() => setPendingProvision(null)}
+        onConfirm={() => {
+          const next = pendingProvision;
+          setPendingProvision(null);
+          if (next) provision(next);
+        }}
+      />
+      {transactionStep && (
+        <TransactionProgress
+          title="Provision institution"
+          currentStep={transactionStep}
+          steps={[
+            { id: "check", label: "Check current on-chain authorization", detail: "Already-authorized wallets do not send another transaction." },
+            { id: "wallet", label: "Authorize issuer if required", detail: "Only the administrator wallet may send this Sepolia role transaction." },
+            { id: "register", label: "Register private institution membership", detail: "The public ID and encrypted membership are stored off-chain." },
+          ]}
+        />
+      )}
     </DashboardLayout>
   );
 }

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
+import { BadgeCheck, Clock3, Radio, RefreshCw } from "lucide-react";
 
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
 import Button from "../../components/common/Button";
+import PageHeader from "../../components/common/PageHeader";
 
 import { useAuth } from "../../context/useAuth";
 import { apiErrorMessage } from "../../services/api";
@@ -41,36 +43,27 @@ function Dashboard() {
 
   return (
     <DashboardLayout>
-      <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
+      <PageHeader
+        eyebrow="Issuer workspace"
+        title={institution.name}
+      />
 
-      {/* Welcome Banner */}
-      <div className="bg-blue-700 text-white rounded-xl p-6 mb-8 shadow">
-        <h2 className="text-2xl font-bold">
-          {institution.name}
-        </h2>
-
-        <p className="mt-2 text-blue-100">
-          Review private citizen requests and sign certificate hashes with the
-          authenticated, authorized issuer wallet.
-        </p>
-        <p className="mt-3 font-mono text-sm text-blue-100">
-          Public institution ID: {institution.publicId}
-        </p>
+      <div className="content-grid section-spacing grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="Pending Requests" value={requests.filter((item) => item.status === "PENDING").length} icon={Clock3} />
+        <StatCard title="Processing" value={requests.filter((item) => item.status === "PROCESSING").length} icon={RefreshCw} />
+        <StatCard title="Active Proofs" value={certificates.filter((item) => item.status === "ACTIVE").length} icon={BadgeCheck} />
+        <StatCard
+          title="Network"
+          value={chainStatus}
+          icon={Radio}
+          connected={chainStatus === "Sepolia Network"}
+        />
       </div>
 
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-        <StatCard title="Pending Requests" value={requests.filter((item) => item.status === "PENDING").length} color="yellow" />
-        <StatCard title="Processing" value={requests.filter((item) => item.status === "PROCESSING").length} color="blue" />
-        <StatCard title="Active Proofs" value={certificates.filter((item) => item.status === "ACTIVE").length} color="green" />
-        <StatCard title="Network" value={chainStatus} color="yellow" />
-      </div>
+      <div className="app-panel panel-padding">
+        <h2 className="mb-4 text-xl font-semibold">Quick Actions</h2>
 
-      {/* Quick Actions */}
-      <div className="bg-white rounded-xl shadow p-6 mt-8">
-        <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-
-        <div className="flex flex-wrap gap-4">
+        <div className="action-cluster">
           <Button onClick={() => navigate("/issuer/issue")}>
             Open Requests
           </Button>

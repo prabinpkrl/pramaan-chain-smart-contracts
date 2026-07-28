@@ -4,6 +4,9 @@ import toast from "react-hot-toast";
 
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
+import ConfirmModal from "../../components/common/ConfirmModal";
+import PageHeader from "../../components/common/PageHeader";
+import TransactionProgress from "../../components/common/TransactionProgress";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { config } from "../../config";
 import { useAuth } from "../../context/useAuth";
@@ -21,6 +24,8 @@ function DocumentRegistry({ onlyRevoked = false }) {
   const [institutionId, setInstitutionId] = useState(session.issuerMemberships[0]?.id || "");
   const [certificates, setCertificates] = useState([]);
   const [busyId, setBusyId] = useState("");
+  const [pendingRevocation, setPendingRevocation] = useState(null);
+  const [transactionStep, setTransactionStep] = useState("");
 
   const load = useCallback(async () => {
     if (!institutionId) return;
@@ -35,14 +40,14 @@ function DocumentRegistry({ onlyRevoked = false }) {
   }, [institutionId]);
 
   const revoke = async (certificate) => {
-    if (
-      certificate.issuer.toLowerCase() !== session.address.toLowerCase()
-      || !window.confirm("Permanently revoke this certificate proof on Sepolia?")
-    ) return;
+    if (certificate.issuer.toLowerCase() !== session.address.toLowerCase()) return;
     setBusyId(certificate.id);
+    setTransactionStep("prepare");
     try {
       const prepared = await prepareRevocation(certificate.id, institutionId);
+      setTransactionStep("wallet");
       const transactionHash = await revokeOnChain(certificate.documentHash, session.address);
+      setTransactionStep("validate");
       await confirmRevocation(
         certificate.id,
         institutionId,
@@ -56,6 +61,7 @@ function DocumentRegistry({ onlyRevoked = false }) {
       await load().catch(() => undefined);
     } finally {
       setBusyId("");
+      setTransactionStep("");
     }
   };
 
@@ -65,16 +71,13 @@ function DocumentRegistry({ onlyRevoked = false }) {
 
   return (
     <DashboardLayout>
-      <div className="mb-6 flex items-end justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-            Private assignment plus public proof
-          </p>
-          <h1 className="text-3xl font-bold">
-            {onlyRevoked ? "Revoked Certificates" : "Document Registry"}
-          </h1>
-        </div>
-        {session.issuerMemberships.length > 1 && (
+      <PageHeader
+        eyebrow="Private assignment plus public proof"
+        title={onlyRevoked ? "Revoked certificates" : "Document registry"}
+        description={onlyRevoked
+          ? "Review permanently revoked proofs and their public verification links."
+          : "Inspect issued proofs, share privacy-safe verification links, and revoke only with the original issuer wallet."}
+        actions={session.issuerMemberships.length > 1 ? (
           <select
             value={institutionId}
             onChange={(event) => setInstitutionId(event.target.value)}
@@ -84,23 +87,23 @@ function DocumentRegistry({ onlyRevoked = false }) {
               <option key={institution.id} value={institution.id}>{institution.name}</option>
             ))}
           </select>
-        )}
-      </div>
-      <div className="grid gap-5 lg:grid-cols-2">
+        ) : null}
+      />
+      <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
         {visible.map((certificate) => {
           const originalIssuer =
             certificate.issuer.toLowerCase() === session.address.toLowerCase();
           const publicUrl = verificationUrl(config.publicAppUrl, certificate.documentHash);
           return (
-            <article key={certificate.id} className="rounded-xl bg-white p-6 shadow">
-              <div className="flex items-start justify-between gap-4">
+            <article key={certificate.id} className="app-panel p-5 sm:p-6">
+              <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
                 <div>
                   <h2 className="text-xl font-semibold">{certificate.certificateType}</h2>
                   <p className="text-gray-500">{certificate.institutionName}</p>
                 </div>
                 <Badge status={certificate.status} />
               </div>
-              <p className="mt-4 break-all rounded bg-gray-50 p-3 font-mono text-xs">
+              <p className="mono-value mt-4 break-all rounded-xl border border-[var(--border)] bg-[var(--canvas-soft)] p-3 text-xs">
                 {certificate.documentHash}
               </p>
               <p className="mt-3 text-sm text-gray-500">
@@ -109,9 +112,11 @@ function DocumentRegistry({ onlyRevoked = false }) {
               {certificate.revokedAt && (
                 <p className="text-sm text-gray-500">Revoked {formatDate(certificate.revokedAt)}</p>
               )}
-              <div className="mt-5 flex items-end justify-between gap-4">
-                <QRCode value={publicUrl} size={104} />
-                <div className="flex flex-col items-end gap-3">
+              <div className="mt-5 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end sm:gap-5">
+                <div className="rounded-xl bg-white p-2">
+                  <QRCode value={publicUrl} size={104} bgColor="#ffffff" fgColor="#090a0d" />
+                </div>
+                <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:items-end">
                   <a className="text-sm font-medium text-blue-700 hover:underline" href={publicUrl}>
                     Public verification
                   </a>
@@ -119,7 +124,7 @@ function DocumentRegistry({ onlyRevoked = false }) {
                     <Button
                       variant="danger"
                       loading={busyId === certificate.id}
-                      onClick={() => revoke(certificate)}
+                      onClick={() => setPendingRevocation(certificate)}
                     >
                       Revoke with original wallet
                     </Button>
@@ -135,11 +140,34 @@ function DocumentRegistry({ onlyRevoked = false }) {
           );
         })}
         {visible.length === 0 && (
-          <div className="rounded-xl bg-white p-8 text-center text-gray-500 shadow">
+          <div className="app-panel p-8 text-center text-gray-500 sm:p-10">
             No {onlyRevoked ? "revoked " : ""}certificate proofs found.
           </div>
         )}
       </div>
+      <ConfirmModal
+        isOpen={Boolean(pendingRevocation)}
+        title="Permanently revoke this proof?"
+        message={`Revocation cannot be reversed. Your original issuer wallet will submit the hash ${pendingRevocation?.documentHash || ""} to Sepolia.`}
+        confirmText="Continue to wallet"
+        onCancel={() => setPendingRevocation(null)}
+        onConfirm={() => {
+          const certificate = pendingRevocation;
+          setPendingRevocation(null);
+          if (certificate) revoke(certificate);
+        }}
+      />
+      {transactionStep && (
+        <TransactionProgress
+          title="Revoke certificate proof"
+          currentStep={transactionStep}
+          steps={[
+            { id: "prepare", label: "Validate original issuer and reserve attempt", detail: "The backend checks current membership and immutable issuer ownership." },
+            { id: "wallet", label: "Confirm permanent revocation in wallet", detail: "Wait for a successful Sepolia receipt." },
+            { id: "validate", label: "Validate receipt and final REVOKED state", detail: "The backend checks the sender, event, hash, and permanent status." },
+          ]}
+        />
+      )}
     </DashboardLayout>
   );
 }

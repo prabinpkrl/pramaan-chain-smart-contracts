@@ -3,6 +3,19 @@
 This React + Vite application provides the public verifier and the
 administrator, issuer, citizen, and unlinked-wallet views from one build.
 
+## Interface direction
+
+The interface uses a restrained Ethereum-inspired visual system: neutral
+near-black surfaces, crisp borders, one violet interaction accent, clear
+status colors, and no decorative gradients. Motion is short and purposeful.
+The landing page's proof crystal is an optional, lazy-loaded WebGL enhancement
+with a lightweight SVG fallback; portal workflows remain conventional,
+responsive, and keyboard accessible.
+
+The component system uses Motion for interface transitions and React Three
+Fiber for the isolated landing-page visual. Route-level lazy loading keeps
+portal code and blockchain libraries outside the initial page bundle.
+
 ## Run locally
 
 Start the read-only blockchain gateway on port `3000` and the private
@@ -64,6 +77,14 @@ already know that chain.
 | `npm test` | Run the frontend unit tests |
 | `npm run build` | Build the production bundle under `dist/` |
 | `npm run preview` | Preview the built bundle |
+| `npm run test:e2e` | Build and run mocked desktop/mobile browser journeys |
+| `npm run test:e2e:headed` | Run the mocked browser journeys with visible browsers |
+| `npm run test:e2e:live` | Start all three real services and run the read-only Sepolia browser check |
+
+The normal E2E suite mocks the wallet, session, and HTTP boundaries so it is
+deterministic and cannot broadcast a transaction. The live suite uses the
+configured gateway only for health and public certificate verification; it
+does not call a write endpoint or request a wallet signature.
 
 For complete startup, security, workflow, and API details, see
 [`../docs/FRONTEND_APPLICATION.md`](../docs/FRONTEND_APPLICATION.md). The

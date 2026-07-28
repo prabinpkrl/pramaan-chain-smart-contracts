@@ -103,11 +103,20 @@ npm ci
 cp .env.example .env
 npm run lint
 npm test
+npm run build
+npm run test:e2e
 npm run dev
 ```
 
 All `VITE_*` values are public browser configuration. No secret name or value
 belongs in the frontend environment.
+
+`npm run test:e2e` runs deterministic desktop and mobile browser journeys with
+mocked wallet and service boundaries. `npm run test:e2e:live` starts the
+existing blockchain gateway, a temporary-database application backend, and
+the production frontend preview, then checks gateway health and public
+certificate verification against Sepolia. The live check is read-only and
+must never be expanded to issue, revoke, authorize, or remove an issuer.
 
 ## Authentication and roles
 

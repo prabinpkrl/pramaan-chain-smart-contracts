@@ -9,6 +9,7 @@ function ConfirmModal({
   onCancel,
   confirmText = "Confirm",
   cancelText = "Cancel",
+  confirmVariant = "danger",
 }) {
   return (
     <Modal isOpen={isOpen} onClose={onCancel} title={title}>
@@ -20,7 +21,7 @@ function ConfirmModal({
             {cancelText}
           </Button>
 
-          <Button variant="danger" onClick={onConfirm}>
+          <Button variant={confirmVariant} onClick={onConfirm}>
             {confirmText}
           </Button>
         </div>

@@ -149,10 +149,12 @@ function DocumentDetails({ document, onClose }) {
         </h2>
 
         <div className="flex justify-center">
-          <div className="bg-white border rounded-xl p-4 shadow-sm">
+          <div className="rounded-xl border bg-[#fff] p-4 shadow-sm">
             <QRCode
               value={verificationUrl(config.publicAppUrl, document.documentHash)}
               size={180}
+              bgColor="#ffffff"
+              fgColor="#090a0d"
             />
           </div>
         </div>

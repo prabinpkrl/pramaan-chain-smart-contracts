@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
 import Input from "../../components/common/Input";
+import PageHeader from "../../components/common/PageHeader";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import { apiErrorMessage } from "../../services/api";
 import {
@@ -57,8 +58,12 @@ function CitizenRequests() {
 
   return (
     <DashboardLayout>
-      <h1 className="mb-6 text-3xl font-bold">Certificate Requests</h1>
-      <section className="mb-8 max-w-2xl rounded-xl bg-white p-6 shadow">
+      <PageHeader
+        eyebrow="Private institution workflow"
+        title="Certificate requests"
+        description="Create an institution-scoped request and track its pending, processing, issued, or rejected state."
+      />
+      <section className="app-panel panel-padding section-spacing max-w-2xl">
         <h2 className="mb-4 text-xl font-semibold">New request</h2>
         <form onSubmit={create}>
           <label htmlFor="institution" className="mb-2 block font-medium">
@@ -94,10 +99,10 @@ function CitizenRequests() {
         </form>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
         {requests.map((request) => (
-          <article key={request.id} className="rounded-xl bg-white p-6 shadow">
-            <div className="flex items-start justify-between gap-4">
+          <article key={request.id} className="app-panel p-5 sm:p-6">
+            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
               <div>
                 <h2 className="text-lg font-semibold">{request.certificateType}</h2>
                 <p className="text-sm text-gray-500">{request.institutionName}</p>
@@ -111,7 +116,7 @@ function CitizenRequests() {
           </article>
         ))}
         {requests.length === 0 && (
-          <div className="rounded-xl bg-white p-8 text-center text-gray-500 shadow">
+          <div className="app-panel p-8 text-center text-gray-500 sm:p-10">
             No certificate requests yet.
           </div>
         )}

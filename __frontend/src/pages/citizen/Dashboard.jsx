@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
+import { BadgeCheck, Building2, Clock3 } from "lucide-react";
 
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import StatCard from "../../components/common/StatCard";
 import Button from "../../components/common/Button";
+import PageHeader from "../../components/common/PageHeader";
 
 import { useAuth } from "../../context/useAuth";
 import { apiErrorMessage } from "../../services/api";
@@ -30,32 +32,27 @@ function Dashboard() {
 
   return (
     <DashboardLayout>
-      <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
+      <PageHeader
+        eyebrow="Citizen workspace"
+        title="Your private proof workspace"
+      />
 
-      <div className="bg-blue-700 text-white rounded-xl p-6 mb-8 shadow">
-        <h2 className="text-2xl font-bold">Private citizen workspace</h2>
-        <p className="mt-2 text-blue-100">
-          Your wallet controls access, while assignments remain encrypted
-          off-chain and public verification uses only a certificate hash.
-        </p>
+      <div className="content-grid section-spacing grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+        <StatCard title="Institutions" value={session.citizenRelationships.length} icon={Building2} />
+        <StatCard title="Pending Requests" value={requests.filter((item) => item.status === "PENDING").length} icon={Clock3} />
+        <StatCard title="Active Proofs" value={certificates.filter((item) => item.status === "ACTIVE").length} icon={BadgeCheck} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
-        <StatCard title="Institutions" value={session.citizenRelationships.length} color="blue" />
-        <StatCard title="Pending Requests" value={requests.filter((item) => item.status === "PENDING").length} color="yellow" />
-        <StatCard title="Active Proofs" value={certificates.filter((item) => item.status === "ACTIVE").length} color="green" />
-      </div>
-
-      <div className="mb-8 rounded-xl bg-white p-6 shadow">
-        <div className="mb-4 flex items-center justify-between gap-4">
+      <div className="app-panel panel-padding section-spacing">
+        <div className="mb-5 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
           <h2 className="text-xl font-semibold">Connected Institutions</h2>
           <Button variant="secondary" onClick={() => navigate("/citizen/connect")}>
             Connect another
           </Button>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
           {session.citizenRelationships.map((institution) => (
-            <div key={institution.id} className="rounded-lg border p-4">
+            <div key={institution.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-raised)] p-4">
               <p className="font-semibold">{institution.name}</p>
               <p className="mt-1 font-mono text-sm text-blue-700">
                 {institution.publicId}
@@ -65,13 +62,13 @@ function Dashboard() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow p-6">
-        <h2 className="text-xl font-semibold mb-2">Certificate ownership boundary</h2>
+      <div className="app-panel panel-padding">
+        <h2 className="mb-2 text-xl font-semibold">Certificate ownership boundary</h2>
         <p className="text-gray-600">
           The private application database assigns proofs to this wallet.
           The public blockchain authenticates the hash but cannot identify the citizen.
         </p>
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="action-cluster mt-6">
           <Button onClick={() => navigate("/citizen/requests")}>Create or view requests</Button>
           <Button variant="secondary" onClick={() => navigate("/citizen/my-documents")}>View my proofs</Button>
           <Button variant="secondary" onClick={() => navigate("/verify")}>Public verifier</Button>

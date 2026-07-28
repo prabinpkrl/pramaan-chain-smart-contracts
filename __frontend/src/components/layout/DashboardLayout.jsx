@@ -1,15 +1,21 @@
+import { useState } from "react";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 
 function DashboardLayout({ children }) {
+  const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+
   return (
-    <div className="min-h-screen bg-slate-100">
-      <Header />
-
-      <div className="flex">
-        <Sidebar />
-
-        <main className="flex-1 p-6">{children}</main>
+    <div className="min-h-screen bg-[var(--canvas)]">
+      <Sidebar
+        mobileOpen={mobileNavigationOpen}
+        onClose={() => setMobileNavigationOpen(false)}
+      />
+      <div className="min-h-screen lg:pl-68">
+        <Header onOpenNavigation={() => setMobileNavigationOpen(true)} />
+        <main className="mx-auto w-full max-w-[1560px] px-5 py-8 sm:px-8 sm:py-10 lg:px-10 lg:py-12">
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
 
 import Button from "../../components/common/Button";
@@ -34,12 +34,12 @@ function ConnectInstitution() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto max-w-xl rounded-xl bg-white p-8 shadow">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
+      <div className="app-panel-raised mx-auto max-w-xl p-5 sm:p-7 lg:p-9">
+        <p className="eyebrow">
           Institution connection
         </p>
-        <h1 className="mt-2 text-3xl font-bold">Connect an institution</h1>
-        <p className="mb-6 mt-3 text-gray-600">
+        <h1 className="mt-3 text-[1.75rem] font-semibold leading-tight tracking-[-0.035em] sm:text-3xl">Connect an institution</h1>
+        <p className="mb-6 mt-3 text-sm leading-6 text-[var(--text-muted)] sm:mb-7">
           Enter the stable public ID shared by the institution. Your SIWE
           session links this wallet privately; the connection is never
           written to the blockchain and needs no institution approval.
@@ -53,7 +53,7 @@ function ConnectInstitution() {
             placeholder="TU-NEPAL"
             autoComplete="off"
           />
-          <Button type="submit" loading={busy} disabled={publicId.trim().length < 3}>
+          <Button type="submit" loading={busy} disabled={publicId.trim().length < 3} fullWidth>
             Connect institution
           </Button>
         </form>

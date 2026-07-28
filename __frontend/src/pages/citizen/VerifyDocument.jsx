@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import toast from "react-hot-toast";
-import { CheckCircle2, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  FileKey2,
+  FileUp,
+  Fingerprint,
+  LockKeyhole,
+  Search,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
 
 import Button from "../../components/common/Button";
 import EtherscanLink from "../../components/common/EtherscanLink";
+import PublicHeader from "../../components/layout/PublicHeader";
 import { apiErrorMessage } from "../../services/api";
 import { verifyDocument } from "../../services/documentService";
 import { hashDocument } from "../../utils/hashDocument";
@@ -19,6 +29,7 @@ function VerifyDocument() {
   const [hashInput, setHashInput] = useState(routeHash || "");
   const [selectedFile, setSelectedFile] = useState(null);
   const [result, setResult] = useState(null);
+  const [mode, setMode] = useState(routeHash ? "hash" : "file");
   const [loading, setLoading] = useState(
     Boolean(routeHash && isValidDocumentHash(routeHash)),
   );
@@ -98,119 +109,223 @@ function VerifyDocument() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="flex items-center justify-between border-b bg-white px-6 py-4">
-        <Link to="/" className="text-2xl font-bold text-blue-700">PramaanChain</Link>
-        <Link to="/login" className="font-medium text-blue-700 hover:underline">
-          Wallet sign-in
-        </Link>
-      </header>
-      <main className="mx-auto max-w-4xl p-6">
-        <h1 className="mb-2 text-3xl font-bold">Public Certificate Verifier</h1>
-        <p className="mb-6 text-gray-600">
-          No wallet or login is required. Enter an existing SHA-256 hash, or
-          select a file to hash locally. Files are never uploaded.
-        </p>
-
-        <div className="rounded-xl bg-white p-8 shadow">
-          <form onSubmit={handleVerifyHash}>
-            <label htmlFor="verificationHash" className="mb-2 block text-sm font-medium">
-              Document hash
-            </label>
-            <input
-              id="verificationHash"
-              type="text"
-              value={hashInput}
-              onChange={(event) => {
-                setHashInput(event.target.value);
-                setResult(null);
-              }}
-              placeholder="0x followed by 64 hexadecimal characters"
-              spellCheck="false"
-              autoComplete="off"
-              className="block w-full rounded-lg border border-gray-300 p-3 font-mono text-sm"
-            />
-            <p className="mb-4 mt-2 text-xs text-gray-500">
-              Paste the exact 32-byte SHA-256 digest recorded on PramaanChain.
-            </p>
-            <Button type="submit" loading={loading}>Verify hash</Button>
-          </form>
-
-          <div className="my-8 flex items-center gap-4 text-sm text-gray-400">
-            <span className="h-px flex-1 bg-gray-200" />
-            OR VERIFY THE ORIGINAL FILE
-            <span className="h-px flex-1 bg-gray-200" />
+    <div className="min-h-screen bg-[var(--canvas)]">
+      <PublicHeader />
+      <main className="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-12 lg:py-16">
+        <div className="mb-8 grid gap-5 sm:mb-10 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <p className="eyebrow">Public · Read-only · No wallet</p>
+            <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-[-0.045em] sm:mt-4 sm:text-5xl">
+              Verify an exact certificate proof.
+            </h1>
           </div>
+          <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs text-[var(--text-muted)]">
+            <span className="mono-value text-[var(--accent-strong)]">ETH</span>
+            Ethereum Sepolia
+          </div>
+        </div>
 
-          <label htmlFor="verificationFile" className="mb-2 block text-sm font-medium">
-            Upload document
-          </label>
-          <input
-            id="verificationFile"
-            type="file"
-            accept={ACCEPTED_TYPES}
-            onChange={(event) => {
-              setSelectedFile(event.target.files[0] || null);
-              setResult(null);
-            }}
-            className="block w-full rounded-lg border border-gray-300 p-3"
-          />
-          <p className="mb-4 mt-2 text-xs text-gray-500">
-            {selectedFile
-              ? `${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)`
-              : "Select the original file to calculate its SHA-256 digest locally."}
-          </p>
-          <Button onClick={handleVerifyFile} loading={loading}>Verify document</Button>
+        <div className="grid gap-5 sm:gap-6 lg:grid-cols-[1.05fr_.95fr]">
+          <section className="app-panel-raised p-5 sm:p-7">
+            <div className="grid grid-cols-2 gap-2 rounded-xl border border-[var(--border)] bg-[var(--canvas-soft)] p-1.5" role="tablist" aria-label="Verification method">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "file"}
+                className={`flex min-h-11 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition ${
+                  mode === "file"
+                    ? "bg-[var(--surface-hover)] text-[var(--text)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
+                onClick={() => setMode("file")}
+              >
+                <FileUp size={17} />
+                Original file
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "hash"}
+                className={`flex min-h-11 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition ${
+                  mode === "hash"
+                    ? "bg-[var(--surface-hover)] text-[var(--text)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                }`}
+                onClick={() => setMode("hash")}
+              >
+                <Fingerprint size={17} />
+                Document hash
+              </button>
+            </div>
 
-          {routeHash && loading && (
-            <p className="text-gray-600">Checking the shared certificate hash…</p>
-          )}
-
-          {result && (
-            <section className="mt-8 space-y-5 rounded-xl border bg-gray-50 p-6">
-              <div className={`flex items-center gap-3 ${
-                result.status === "ACTIVE" ? "text-green-700" : "text-red-700"
-              }`}>
-                {result.status === "ACTIVE" ? <CheckCircle2 size={28} /> : <XCircle size={28} />}
-                <h2 className="text-xl font-semibold">
-                  {result.status === "ACTIVE"
-                    ? "Active certificate"
-                    : result.status === "REVOKED"
-                      ? "Revoked certificate"
-                      : "Certificate not found"}
-                </h2>
-              </div>
-
-              {result.status === "NOT_FOUND" ? (
-                <p className="text-gray-600">
-                  The hash is not anchored in PramaanChain. The file may be
-                  unissued or changed since issuance.
+            {mode === "hash" ? (
+              <form onSubmit={handleVerifyHash} className="mt-7">
+                <label htmlFor="verificationHash" className="mb-2 block text-sm font-medium">
+                  SHA-256 document hash
+                </label>
+                <textarea
+                  id="verificationHash"
+                  rows="3"
+                  value={hashInput}
+                  onChange={(event) => {
+                    setHashInput(event.target.value);
+                    setResult(null);
+                  }}
+                  placeholder="0x followed by 64 hexadecimal characters"
+                  spellCheck="false"
+                  autoComplete="off"
+                  className="mono-value block w-full resize-none rounded-xl border border-[var(--border-strong)] bg-[var(--canvas-soft)] p-4 text-sm focus:border-[var(--accent)] focus:outline-none"
+                />
+                <p className="mb-5 mt-2 text-xs leading-5 text-[var(--text-muted)]">
+                  Paste the exact 32-byte digest recorded by the issuer.
                 </p>
-              ) : (
-                <>
-                  <div>
-                    <p className="text-sm text-gray-500">Document hash</p>
-                    <p className="break-all rounded bg-white p-3 font-mono text-xs">
-                      {result.documentHash}
-                    </p>
+                <Button type="submit" loading={loading} fullWidth size="lg">
+                  <Search size={18} />
+                  Verify hash
+                </Button>
+              </form>
+            ) : (
+              <div className="mt-7">
+                <label
+                  htmlFor="verificationFile"
+                  className="group flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-strong)] bg-[var(--canvas-soft)] p-6 text-center transition hover:border-[var(--accent)]"
+                >
+                  <span className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-[var(--accent-strong)]">
+                    <FileKey2 size={24} />
+                  </span>
+                  <span className="font-semibold">
+                    {selectedFile ? selectedFile.name : "Choose the original certificate file"}
+                  </span>
+                  <span className="mt-2 text-xs leading-5 text-[var(--text-muted)]">
+                    {selectedFile
+                      ? `${(selectedFile.size / 1024).toFixed(1)} KB · Ready to hash locally`
+                      : "PDF, Office documents, images, text, CSV, XLSX, or ZIP"}
+                  </span>
+                </label>
+                <input
+                  id="verificationFile"
+                  type="file"
+                  accept={ACCEPTED_TYPES}
+                  onChange={(event) => {
+                    setSelectedFile(event.target.files[0] || null);
+                    setResult(null);
+                  }}
+                  className="sr-only"
+                />
+                <div className="mb-5 mt-3 flex items-start gap-2 text-xs leading-5 text-[var(--text-muted)]">
+                  <LockKeyhole className="mt-0.5 shrink-0 text-[var(--success)]" size={14} />
+                  Hashing happens on this device. PramaanChain receives only the digest.
+                </div>
+                <Button onClick={handleVerifyFile} loading={loading} fullWidth size="lg">
+                  <ShieldCheck size={18} />
+                  Verify document
+                </Button>
+              </div>
+            )}
+
+            {routeHash && loading && (
+              <div className="mt-5 flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text-muted)]" role="status">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" />
+                Checking the shared certificate hash…
+              </div>
+            )}
+          </section>
+
+          <aside className="app-panel min-h-[430px] p-5 sm:p-7" aria-live="polite">
+            {!result ? (
+              <div className="grid h-full min-h-96 place-items-center text-center">
+                <div>
+                  <div className="mx-auto mb-5 w-fit rounded-2xl border border-[var(--border)] bg-[var(--surface-raised)] p-4 text-[var(--text-dim)]">
+                    <ShieldCheck size={32} />
                   </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Issuer</p>
-                    <p className="break-all font-mono text-xs">{result.issuer}</p>
-                  </div>
-                  <p><strong>Issued:</strong>{" "}
-                    {result.issuedAt ? new Date(result.issuedAt * 1000).toLocaleString() : "-"}
+                  <h2 className="text-lg font-semibold">Verification result</h2>
+                  <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-[var(--text-muted)]">
+                    Select a file or enter its exact digest to query the public proof registry.
                   </p>
-                  {result.status === "REVOKED" && (
-                    <p><strong>Revoked:</strong>{" "}
-                      {result.revokedAt ? new Date(result.revokedAt * 1000).toLocaleString() : "-"}
-                    </p>
-                  )}
-                  {result.transactionHash && <EtherscanLink txHash={result.transactionHash} />}
-                </>
-              )}
-            </section>
-          )}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div
+                  className={`rounded-xl border p-5 ${
+                    result.status === "ACTIVE"
+                      ? "border-[#1e5848] bg-[var(--success-soft)] text-[var(--success)]"
+                      : result.status === "REVOKED"
+                        ? "border-[#71303c] bg-[var(--danger-soft)] text-[var(--danger)]"
+                        : "border-[#66521e] bg-[var(--warning-soft)] text-[var(--warning)]"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {result.status === "ACTIVE" ? <CheckCircle2 size={28} /> : <XCircle size={28} />}
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.15em]">Registry status</p>
+                      <h2 className="mt-1 text-xl font-semibold">
+                        {result.status === "ACTIVE"
+                          ? "Active certificate"
+                          : result.status === "REVOKED"
+                            ? "Revoked certificate"
+                            : "Certificate not found"}
+                      </h2>
+                    </div>
+                  </div>
+                </div>
+
+                {result.status === "NOT_FOUND" ? (
+                  <p className="mt-6 text-sm leading-6 text-[var(--text-muted)]">
+                    This hash is not anchored in PramaanChain. The file may be
+                    unissued or changed since issuance.
+                  </p>
+                ) : (
+                  <dl className="mt-6 space-y-5">
+                    <div>
+                      <dt className="text-xs font-medium uppercase tracking-wide text-[var(--text-dim)]">Document hash</dt>
+                      <dd className="mono-value mt-2 break-all rounded-xl border border-[var(--border)] bg-[var(--canvas-soft)] p-3 text-xs leading-5">
+                        {result.documentHash}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-medium uppercase tracking-wide text-[var(--text-dim)]">Issuer</dt>
+                      <dd className="mono-value mt-2 break-all text-xs leading-5">{result.issuer}</dd>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <dt className="text-xs text-[var(--text-dim)]">Issued</dt>
+                        <dd className="mt-1 text-sm">
+                          {result.issuedAt ? new Date(result.issuedAt * 1000).toLocaleString() : "-"}
+                        </dd>
+                      </div>
+                      {result.status === "REVOKED" && (
+                        <div>
+                          <dt className="text-xs text-[var(--text-dim)]">Revoked</dt>
+                          <dd className="mt-1 text-sm">
+                            {result.revokedAt ? new Date(result.revokedAt * 1000).toLocaleString() : "-"}
+                          </dd>
+                        </div>
+                      )}
+                    </div>
+                    {result.transactionHash && (
+                      <div className="border-t border-[var(--border)] pt-5">
+                        <EtherscanLink txHash={result.transactionHash} />
+                      </div>
+                    )}
+                  </dl>
+                )}
+              </div>
+            )}
+          </aside>
+        </div>
+
+        <div className="mt-6 grid gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-4">
+          {[
+            ["Exact-match proof", "Changing one byte produces a different digest."],
+            ["No identity claim", "A valid hash does not prove who owns the document."],
+            ["Read-only check", "Verification sends no transaction and costs no ETH."],
+          ].map(([title, text]) => (
+            <div key={title} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+              <p className="text-sm font-semibold">{title}</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{text}</p>
+            </div>
+          ))}
         </div>
       </main>
     </div>

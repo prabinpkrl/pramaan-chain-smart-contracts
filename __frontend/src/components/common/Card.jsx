@@ -1,5 +1,9 @@
-function Card({ children }) {
-  return <div className="bg-white rounded-xl shadow-md p-6">{children}</div>;
+function Card({ children, className = "", elevated = false }) {
+  return (
+    <div className={`${elevated ? "app-panel-raised" : "app-panel"} panel-padding ${className}`}>
+      {children}
+    </div>
+  );
 }
 
 export default Card;

@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Input from "../../components/common/Input";
 import EtherscanLink from "../../components/common/EtherscanLink";
+import PageHeader from "../../components/common/PageHeader";
 
 import { getRecentEvents } from "../../services/documentService";
 
@@ -58,9 +59,13 @@ function AuditLogs() {
 
   return (
     <DashboardLayout>
-      <h1 className="text-3xl font-bold mb-6">Audit Logs</h1>
+      <PageHeader
+        eyebrow="On-chain evidence"
+        title="Audit logs"
+        description="Read the indexed PramaanChain domain events and open their public Sepolia transactions."
+      />
 
-      <div className="mb-6 max-w-md">
+      <div className="mb-4 max-w-md sm:mb-6">
         <Input
           label="Search"
           placeholder="Search by hash, address, or event type"
@@ -69,15 +74,15 @@ function AuditLogs() {
         />
       </div>
 
-      <div className="bg-white rounded-xl shadow overflow-hidden">
-        <table className="w-full">
+      <div className="app-panel overflow-x-auto">
+        <table className="w-full min-w-[760px]">
           <thead className="bg-gray-50 border-b">
             <tr>
-              <th className="text-left py-4 px-6">Event</th>
-              <th className="text-left px-6">Document / Issuer</th>
-              <th className="text-left px-6">Block</th>
-              <th className="text-left px-6">Timestamp</th>
-              <th className="text-left px-6">Tx</th>
+              <th className="px-4 py-4 text-left sm:px-6">Event</th>
+              <th className="px-4 text-left sm:px-6">Document / Issuer</th>
+              <th className="px-4 text-left sm:px-6">Block</th>
+              <th className="px-4 text-left sm:px-6">Timestamp</th>
+              <th className="px-4 text-left sm:px-6">Tx</th>
             </tr>
           </thead>
 
@@ -100,7 +105,7 @@ function AuditLogs() {
                   key={`${event.transactionHash}-${index}`}
                   className="border-b hover:bg-gray-50 transition"
                 >
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-4 sm:px-6">
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-medium ${
                         TYPE_COLORS[event.type] || "bg-gray-100 text-gray-700"
@@ -110,21 +115,21 @@ function AuditLogs() {
                     </span>
                   </td>
 
-                  <td className="px-6">
+                  <td className="px-4 sm:px-6">
                     <p className="font-mono text-xs break-all">
                       {event.documentHash || event.issuer}
                     </p>
                   </td>
 
-                  <td className="px-6">{event.blockNumber}</td>
+                  <td className="px-4 sm:px-6">{event.blockNumber}</td>
 
-                  <td className="px-6 text-sm text-gray-500">
+                  <td className="px-4 text-sm text-gray-500 sm:px-6">
                     {event.timestamp
                       ? new Date(event.timestamp * 1000).toLocaleString()
                       : "-"}
                   </td>
 
-                  <td className="px-6">
+                  <td className="px-4 sm:px-6">
                     <EtherscanLink txHash={event.transactionHash} />
                   </td>
                 </tr>

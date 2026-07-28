@@ -45,7 +45,7 @@ The repository contains four independently tested components:
 | Solidity contract | 45 tests |
 | Public blockchain gateway | 28 tests |
 | Private application backend | 8 tests |
-| React frontend | 16 tests |
+| React frontend | 18 tests plus 17 deterministic browser journeys and 1 live read-only browser check |
 
 See [`docs/README.md`](docs/README.md) for the complete documentation index and
 the distinction between current operating guides and historical completion

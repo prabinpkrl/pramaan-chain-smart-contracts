@@ -6,13 +6,17 @@ function Input({
   placeholder,
   value,
   onChange,
+  hint,
+  error,
+  className = "",
+  inputClassName = "",
   ...inputProps
 }) {
   const inputId = id || name;
 
   return (
-    <div className="mb-4">
-      <label htmlFor={inputId} className="block mb-2 font-medium">
+    <div className={`mb-4 ${className}`}>
+      <label htmlFor={inputId} className="mb-2 block text-sm font-medium text-[var(--text)]">
         {label}
       </label>
 
@@ -23,9 +27,19 @@ function Input({
         placeholder={placeholder}
         value={value}
         onChange={onChange}
+        aria-invalid={Boolean(error) || undefined}
+        aria-describedby={hint || error ? `${inputId}-help` : undefined}
         {...inputProps}
-        className="w-full rounded-lg border border-gray-300 p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className={`min-h-12 w-full rounded-xl border border-[var(--border-strong)] bg-[var(--canvas-soft)] px-3.5 py-3 text-[var(--text)] transition placeholder:text-[var(--text-dim)] hover:border-[#4a5160] focus:border-[var(--accent)] focus:outline-none ${inputClassName}`}
       />
+      {(error || hint) && (
+        <p
+          id={`${inputId}-help`}
+          className={`mt-2 text-xs ${error ? "text-[var(--danger)]" : "text-[var(--text-muted)]"}`}
+        >
+          {error || hint}
+        </p>
+      )}
     </div>
   );
 }

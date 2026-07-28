@@ -1,13 +1,17 @@
-function Select({ label, name, value, onChange, options }) {
+function Select({ label, id, name, value, onChange, options, hint, className = "" }) {
+  const selectId = id || name;
   return (
-    <div className="mb-4">
-      <label className="block mb-2 font-medium">{label}</label>
+    <div className={`mb-4 ${className}`}>
+      <label htmlFor={selectId} className="mb-2 block text-sm font-medium">
+        {label}
+      </label>
 
       <select
+        id={selectId}
         name={name}
         value={value}
         onChange={onChange}
-        className="w-full rounded-lg border border-gray-300 p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="min-h-12 w-full rounded-xl border border-[var(--border-strong)] bg-[var(--canvas-soft)] p-3 focus:border-[var(--accent)] focus:outline-none"
       >
         <option value="">Select {label}</option>
 
@@ -17,6 +21,7 @@ function Select({ label, name, value, onChange, options }) {
           </option>
         ))}
       </select>
+      {hint && <p className="mt-2 text-xs text-[var(--text-muted)]">{hint}</p>}
     </div>
   );
 }

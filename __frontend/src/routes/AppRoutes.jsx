@@ -1,32 +1,32 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 
 import ProtectedRoute from "../components/auth/ProtectedRoute";
+import RouteLoader from "../components/common/RouteLoader";
 
-import Home from "../pages/Home/Home";
-import Login from "../pages/Login/Login";
-
-import AdminDashboard from "../pages/admin/Dashboard";
-import ManageIssuers from "../pages/admin/ManageIssuers";
-import BlockchainMonitor from "../pages/admin/BlockchainMonitor";
-import AuditLogs from "../pages/admin/AuditLogs";
-
-import IssuerDashboard from "../pages/issuer/Dashboard";
-import IssueDocument from "../pages/issuer/IssueDocument";
-import DocumentRegistry from "../pages/issuer/DocumentRegistry";
-import RevokedDocuments from "../pages/issuer/RevokedDocuments";
-import IssuerProfile from "../pages/issuer/Profile";
-
-import CitizenDashboard from "../pages/citizen/Dashboard";
-import VerifyDocument from "../pages/citizen/VerifyDocument";
-import MyDocuments from "../pages/citizen/MyDocuments";
-import VerificationHistory from "../pages/citizen/VerificationHistory";
-import ConnectInstitution from "../pages/citizen/ConnectInstitution";
-import CitizenRequests from "../pages/citizen/CitizenRequests";
+const Home = lazy(() => import("../pages/Home/Home"));
+const Login = lazy(() => import("../pages/Login/Login"));
+const AdminDashboard = lazy(() => import("../pages/admin/Dashboard"));
+const ManageIssuers = lazy(() => import("../pages/admin/ManageIssuers"));
+const BlockchainMonitor = lazy(() => import("../pages/admin/BlockchainMonitor"));
+const AuditLogs = lazy(() => import("../pages/admin/AuditLogs"));
+const IssuerDashboard = lazy(() => import("../pages/issuer/Dashboard"));
+const IssueDocument = lazy(() => import("../pages/issuer/IssueDocument"));
+const DocumentRegistry = lazy(() => import("../pages/issuer/DocumentRegistry"));
+const RevokedDocuments = lazy(() => import("../pages/issuer/RevokedDocuments"));
+const IssuerProfile = lazy(() => import("../pages/issuer/Profile"));
+const CitizenDashboard = lazy(() => import("../pages/citizen/Dashboard"));
+const VerifyDocument = lazy(() => import("../pages/citizen/VerifyDocument"));
+const MyDocuments = lazy(() => import("../pages/citizen/MyDocuments"));
+const VerificationHistory = lazy(() => import("../pages/citizen/VerificationHistory"));
+const ConnectInstitution = lazy(() => import("../pages/citizen/ConnectInstitution"));
+const CitizenRequests = lazy(() => import("../pages/citizen/CitizenRequests"));
 
 function AppRoutes() {
   return (
     <BrowserRouter>
-      <Routes>
+      <Suspense fallback={<RouteLoader message="Loading PramaanChain…" />}>
+        <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/verify" element={<VerifyDocument />} />
@@ -153,8 +153,9 @@ function AppRoutes() {
         />
 
         {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

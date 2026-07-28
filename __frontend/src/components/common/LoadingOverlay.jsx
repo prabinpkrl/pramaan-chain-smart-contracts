@@ -1,12 +1,12 @@
 function LoadingOverlay({ message }) {
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl p-8 w-96 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mx-auto"></div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+      <div className="app-panel-raised w-full max-w-sm p-8 text-center" role="status">
+        <div className="mx-auto h-11 w-11 animate-spin rounded-full border-2 border-[var(--border-strong)] border-t-[var(--accent)]" />
 
-        <h2 className="text-xl font-semibold mt-6">Processing Transaction</h2>
+        <h2 className="mt-6 text-xl font-semibold">Processing transaction</h2>
 
-        <p className="text-gray-600 mt-3">{message}</p>
+        <p className="mt-3 text-sm text-[var(--text-muted)]">{message}</p>
       </div>
     </div>
   );

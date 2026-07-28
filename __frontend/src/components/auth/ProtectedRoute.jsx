@@ -1,7 +1,8 @@
-import { Navigate } from "react-router-dom";
+import { Navigate } from "react-router";
 
 import { useAuth } from "../../context/useAuth";
 import { homeForRole } from "../../utils/roleRoutes";
+import RouteLoader from "../common/RouteLoader";
 
 /**
  * Guards a portal's routes. If no wallet is connected, sends the user back
@@ -13,7 +14,7 @@ function ProtectedRoute({ allowedRoles, children }) {
   const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
 
   if (loading) {
-    return <div className="min-h-screen grid place-items-center">Loading secure session…</div>;
+    return <RouteLoader />;
   }
 
   if (!session) {

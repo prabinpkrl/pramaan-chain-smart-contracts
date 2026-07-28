@@ -1,9 +1,10 @@
-import { useNavigate } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import { useNavigate } from "react-router";
+import { ChevronDown, LogOut, Menu } from "lucide-react";
 
 import { useAuth } from "../../context/useAuth";
 import { shortenAddress } from "../../utils/wallet";
 import { homeForRole } from "../../utils/roleRoutes";
+import Brand from "../brand/Brand";
 
 const ROLE_LABELS = {
   ADMIN: "Administrator",
@@ -12,7 +13,7 @@ const ROLE_LABELS = {
   UNLINKED: "Unlinked wallet",
 };
 
-function Header() {
+function Header({ onOpenNavigation }) {
   const { session, activeRole, setActiveRole, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -28,40 +29,63 @@ function Header() {
   };
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
-      <div>
-        <h1 className="text-2xl font-bold text-blue-700">PramaanChain</h1>
+    <header className="sticky top-0 z-30 flex min-h-18 items-center justify-between border-b border-[var(--border)] bg-[var(--canvas)]/95 px-5 sm:px-8 lg:px-10">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          className="grid min-h-11 min-w-11 place-items-center rounded-xl border border-[var(--border)] text-[var(--text-muted)] lg:hidden"
+          onClick={onOpenNavigation}
+          aria-label="Open navigation"
+        >
+          <Menu size={20} />
+        </button>
+        <div className="lg:hidden">
+          <Brand compact hideNameOnSmall />
+        </div>
+        <div className="hidden items-center gap-2 text-xs text-[var(--text-muted)] sm:flex lg:flex">
+          Ethereum
+          <span className="text-[var(--accent-strong)]">/</span>
+          Sepolia
+        </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-3">
         <div className="text-right">
           {session?.roles?.length > 1 ? (
-            <select
-              aria-label="Active portal"
-              value={activeRole || ""}
-              onChange={handleRoleChange}
-              className="rounded border border-gray-300 px-2 py-1 text-sm"
-            >
-              {session.roles.map((role) => (
-                <option key={role} value={role}>{ROLE_LABELS[role] || role}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                aria-label="Active portal"
+                value={activeRole || ""}
+                onChange={handleRoleChange}
+                className="min-h-10 appearance-none rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2 pl-3 pr-9 text-sm"
+              >
+                {session.roles.map((role) => (
+                  <option key={role} value={role}>{ROLE_LABELS[role] || role}</option>
+                ))}
+              </select>
+              <ChevronDown
+                aria-hidden="true"
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+                size={14}
+              />
+            </div>
           ) : (
-            <p className="text-gray-700 font-medium">
+            <p className="max-w-24 truncate text-sm font-medium text-[var(--text)] sm:max-w-none">
               {ROLE_LABELS[activeRole] || "Guest"}
             </p>
           )}
-          <p className="text-xs text-gray-400 font-mono">
+          <p className="mono-value hidden text-xs text-[var(--text-dim)] sm:block">
             {shortenAddress(session?.address)}
           </p>
         </div>
 
         <button
+          type="button"
           onClick={handleLogout}
-          className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 text-sm font-medium text-[var(--text-muted)] transition hover:border-[#71303c] hover:text-[var(--danger)]"
         >
           <LogOut size={16} />
-          Logout
+          <span className="hidden sm:inline">Logout</span>
         </button>
       </div>
     </header>
