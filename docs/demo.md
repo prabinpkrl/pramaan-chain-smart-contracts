@@ -1,523 +1,491 @@
-# Independent Sepolia Demo
+# Docker Demo: Deploy or Import, Then Run PramaanChain
 
-This guide starts from a fresh clone and produces an independently controlled
-PramaanChain prototype on Ethereum Sepolia. The teammate or reviewer who
-deploys the contract becomes its administrator and does not depend on the
-original PramaanChain administrator wallet.
+This guide starts from a fresh clone and runs the complete PramaanChain
+prototype with Docker Compose. It supports two safe paths:
 
-This is a testnet demonstration, not a production deployment.
+- deploy a new Sepolia contract controlled by your own test-only
+  administrator and issuer wallets; or
+- import and validate an existing Sepolia deployment without sending a
+  transaction.
 
-## What this walkthrough creates
+The deployment phase is separate from application startup. Once a contract is
+configured in the named `deployment_state` Docker volume, future starts only
+run the application and do not redeploy.
 
-- A new Sepolia `PramaanChain` contract
-- A new administrator account controlled by the person running the demo
-- A separate authorized issuer account controlled by the same demo operator
-  or another teammate
-- One synthetic proof issued and permanently revoked by the deployment script
-- A local public gateway pointed at the new deployment
-- A local SIWE and encrypted-SQLite application backend
-- A local React frontend configured for the new contract
+This is a Sepolia prototype, not production infrastructure.
 
-The deployment command sends four Sepolia transactions:
+## 1. What Docker runs
 
-1. deploy the contract;
-2. authorize the issuer;
-3. issue one synthetic document hash; and
-4. revoke that synthetic hash.
+The default Compose stack contains three long-running services:
 
-Do not run it until both test-only wallets are funded and the displayed
-addresses have been checked.
+| Service | Local port | Responsibility |
+| --- | ---: | --- |
+| `frontend` | `5173` | Nginx-hosted React application and public runtime configuration |
+| `gateway` | `3000` | Read-only blockchain API and event index |
+| `app-backend` | `4000` | SIWE, encrypted private relationships, requests, and receipt checks |
 
-## 1. Prerequisites
+Deployment tools are one-shot services under the `deploy` profile. They are
+not started by a normal `docker compose up`.
 
-Install:
+The normal services receive public chain configuration and the RPC endpoint.
+They never receive the administrator private key, issuer private key, or
+Etherscan API key.
+
+## 2. Prerequisites
 
 - Git
-- Node.js `22.13.0` or newer
-- npm
-- A browser wallet such as MetaMask, Rabby, or Coinbase Wallet
+- Docker Engine and `docker compose`
+- a Sepolia RPC endpoint
+- a modern browser
+- a Sepolia-compatible wallet for application use
 
-Obtain:
+For a new deployment, also prepare:
 
-- A Sepolia RPC URL
-- An Etherscan API key for source verification
-- A WalletConnect/Reown project ID if mobile-wallet QR login is required
-- A small amount of Sepolia ETH from a faucet
+- a new test-only administrator/deployer wallet;
+- a different new test-only issuer wallet;
+- enough Sepolia ETH for deployment and authorization; and
+- optionally, an Etherscan API key.
 
-Sepolia is chain ID `11155111`. Never substitute Ethereum mainnet.
+Never use a personal or mainnet wallet. Never paste a seed phrase into this
+project.
 
-## 2. Create dedicated test wallets
+Check the tools:
 
-Create two new accounts that are used only for this demo:
+```bash
+git --version
+docker --version
+docker compose version
+```
 
-| Account | Purpose | Needs Sepolia ETH |
-| --- | --- | --- |
-| Administrator/deployer | Deploys the contract and controls `ADMIN_ROLE` | Yes |
-| Issuer | Receives `ISSUER_ROLE`, issues proofs, and revokes its proofs | Yes |
-
-Record both public addresses. Confirm that they are different.
-
-Do not use a personal wallet, mainnet wallet, seed phrase shared with another
-project, or an account holding real assets. A private key must never be sent
-through chat, committed, placed in frontend configuration, or left in shell
-history.
-
-Fund both public addresses with only the Sepolia ETH needed for the
-demonstration. The administrator pays for deployment and authorization. The
-issuer pays for issuance and revocation.
-
-## 3. Clone and install
+## 3. Clone and configure Docker
 
 ```bash
 git clone https://github.com/prabinpkrl/pramaan-chain-smart-contracts.git
 cd pramaan-chain-smart-contracts
-
-npm ci
-npm --prefix backend ci
-npm --prefix app-backend ci
-npm --prefix __frontend ci
+cp .env.docker.example .env.docker
 ```
 
-Confirm the supported runtime:
-
-```bash
-node --version
-npm --version
-```
-
-## 4. Required test gate before using Sepolia
-
-```bash
-npm run compile
-npm test
-
-npm --prefix backend test
-npm --prefix app-backend test
-npm --prefix __frontend run lint
-npm --prefix __frontend test
-npm --prefix __frontend run build
-```
-
-Every command above must pass before deployment. Do not hide, skip, weaken, or
-delete a failing test to continue. Fix the failure and rerun the complete gate.
-
-Compilation creates:
-
-```text
-artifacts/contracts/PramaanChain.sol/PramaanChain.json
-```
-
-The production-profile deployment and source verification must use the same
-source and compiler configuration.
-
-## 5. Configure deployment secrets
-
-### Recommended: Hardhat encrypted keystore
-
-Enter each value at the interactive prompt:
-
-```bash
-npx hardhat keystore set SEPOLIA_RPC_URL
-npx hardhat keystore set DEPLOYER_PRIVATE_KEY
-npx hardhat keystore set ISSUER_PRIVATE_KEY
-npx hardhat keystore set ETHERSCAN_API_KEY
-```
-
-Use the administrator/deployer private key for `DEPLOYER_PRIVATE_KEY` and the
-separate issuer private key for `ISSUER_PRIVATE_KEY`. The keys should include
-the `0x` prefix.
-
-Hardhat stores these values in its encrypted keystore. The commands do not
-require putting a private key in a tracked file or command argument.
-
-Check only the stored variable names:
-
-```bash
-npx hardhat keystore list
-```
-
-Do not run a command that prints a stored private key.
-
-### Optional fallback: gitignored `.env`
-
-Use this only when the encrypted keystore is unavailable:
-
-```bash
-cp .env.example .env
-```
-
-Replace the four deployment placeholders in `.env`:
+Edit `.env.docker` and set at least:
 
 ```dotenv
-SEPOLIA_RPC_URL=https://your-private-sepolia-rpc.example
-DEPLOYER_PRIVATE_KEY=0xYOUR_TEST_ONLY_ADMINISTRATOR_PRIVATE_KEY
-ISSUER_PRIVATE_KEY=0xYOUR_TEST_ONLY_ISSUER_PRIVATE_KEY
-ETHERSCAN_API_KEY=YOUR_ETHERSCAN_API_KEY
-```
-
-The repository ignores `.env`, but plaintext keys are still less safe than the
-encrypted keystore. Never commit the file, attach it to an issue, or share it.
-
-## 6. Pre-deployment checklist
-
-Before continuing, confirm:
-
-- the RPC reports Sepolia chain ID `11155111`;
-- the administrator and issuer are different accounts;
-- both accounts are test-only;
-- both accounts have enough Sepolia ETH;
-- contract compilation and tests pass;
-- no real certificate or personal information will be used; and
-- the current Git commit is the source you intend to deploy.
-
-The deployment script rejects an unsupported network, a chain-ID mismatch,
-missing signers, and identical administrator and issuer addresses.
-
-## 7. Deploy on-chain and run the checked lifecycle
-
-This is the state-changing step:
-
-```bash
-npm run sepolia:deploy-demo
-```
-
-Wait for the command to finish. Do not interrupt it after a transaction has
-been submitted. If a transaction becomes ambiguous, inspect its hash and
-current contract state before running anything again.
-
-Successful output includes:
-
-```json
-{
-  "network": "sepolia",
-  "chainId": "11155111",
-  "administrator": "0x...",
-  "issuer": "0x...",
-  "contractAddress": "0x...",
-  "deploymentBlockNumber": 12345678,
-  "transactions": {
-    "deployment": "0x...",
-    "issuerAuthorization": "0x...",
-    "certificateIssuance": "0x...",
-    "certificateRevocation": "0x..."
-  },
-  "statusAfterIssuance": "ACTIVE",
-  "statusAfterRevocation": "REVOKED"
-}
-```
-
-Record these public values:
-
-- `contractAddress`
-- `deploymentBlockNumber`
-- `administrator`
-- `issuer`
-- all four transaction hashes
-
-The sample hash is synthetic and ends in `REVOKED`. The contract remains ready
-for new application-issued proofs.
-
-This output is the first on-chain checkpoint. Confirm:
-
-- `network` is `sepolia`;
-- `chainId` is `11155111`;
-- `administrator` matches the dedicated deployer account;
-- `issuer` matches the separate issuer account;
-- `deploymentBlockNumber` is present;
-- all four transaction hashes have successful Sepolia receipts;
-- `statusAfterIssuance` is `ACTIVE`; and
-- `statusAfterRevocation` is `REVOKED`.
-
-If any checkpoint fails or is ambiguous, stop. Do not automatically deploy
-again.
-
-## 8. Verify the contract source
-
-Use the newly reported address:
-
-```bash
-npm run sepolia:verify -- <NEW_CONTRACT_ADDRESS>
-```
-
-Open the deployment on:
-
-```text
-https://sepolia.etherscan.io/address/<NEW_CONTRACT_ADDRESS>#code
-```
-
-Confirm that Etherscan shows verified source and that the address exactly
-matches the deployment output.
-
-## 9. Configure the public gateway
-
-Create its ignored environment file:
-
-```bash
-cp backend/.env.example backend/.env
-```
-
-Set:
-
-```dotenv
-BLOCKCHAIN_NETWORK=sepolia
-BLOCKCHAIN_CHAIN_ID=11155111
-PRAMAAN_CHAIN_ADDRESS=<NEW_CONTRACT_ADDRESS>
-PRAMAAN_CHAIN_START_BLOCK=<NEW_DEPLOYMENT_BLOCK_NUMBER>
-SEPOLIA_RPC_URL=<YOUR_SEPOLIA_RPC_URL>
-CORS_ALLOWED_ORIGINS=http://localhost:5173
-TRUST_PROXY=false
-PORT=3000
-```
-
-Keep the optional server-side gateway write service disabled:
-
-```dotenv
-ISSUER_ADDRESS=
-ISSUER_PRIVATE_KEY=
-WRITE_API_KEY=
-```
-
-The React application signs administrator, issuer, and revocation transactions
-in the selected wallet. It does not use the gateway's optional server-side
-signer.
-
-The RPC provider must support historical `eth_getLogs` beginning at the new
-deployment block. Direct verification can work while event indexing is
-degraded, but document and event lists require historical log access.
-
-## 10. Configure the private application backend
-
-Create its ignored environment file:
-
-```bash
-cp app-backend/.env.example app-backend/.env
-```
-
-Generate a new 32-byte base64 encryption key:
-
-```bash
-node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
-```
-
-Store the generated value immediately in `app-backend/.env`. It encrypts
-private local application fields and is not a wallet key.
-
-Configure:
-
-```dotenv
-PORT=4000
-APP_ORIGIN=http://localhost:5173
+SEPOLIA_RPC_URL=https://your-sepolia-rpc.example
+PUBLIC_APP_URL=http://localhost:5173
 SIWE_DOMAIN=localhost:5173
-DATABASE_PATH=.data/pramaan-app.sqlite
-APP_DATA_ENCRYPTION_KEY=<NEW_32_BYTE_BASE64_VALUE>
-SEPOLIA_RPC_URL=<YOUR_SEPOLIA_RPC_URL>
-BLOCKCHAIN_CHAIN_ID=11155111
-PRAMAAN_CHAIN_ADDRESS=<NEW_CONTRACT_ADDRESS>
+SOURCE_COMMIT=0123456789abcdef0123456789abcdef01234567
+```
+
+`SEPOLIA_RPC_URL` may contain a provider credential, so `.env.docker` is
+ignored by Git. Do not put wallet private keys in this file.
+
+Replace the example `SOURCE_COMMIT` with the output of:
+
+```bash
+git rev-parse HEAD
+```
+
+It must be a full, nonzero 40-character SHA that is already pushed to this
+GitHub repository. Keep the working tree clean for a deployment. The
+contract-tools build uses that exact remote commit, applies an OCI revision
+label, requests BuildKit provenance, and refuses to run when its embedded
+revision differs from `SOURCE_COMMIT`. This binds deployment evidence to
+source that teammates can retrieve and review.
+
+Optional public settings include:
+
+```dotenv
+VITE_WALLETCONNECT_PROJECT_ID=
+BIND_ADDRESS=127.0.0.1
+FRONTEND_PORT=5173
+GATEWAY_PORT=3000
+APP_BACKEND_PORT=4000
 COOKIE_SECURE=false
 ```
 
-Use the same RPC and contract address as the gateway. A different address
-causes role derivation and transaction confirmation to disagree.
+WalletConnect mobile QR login is unavailable when its project ID is blank;
+injected browser wallets and the installation guide remain available.
+Keep `BIND_ADDRESS=127.0.0.1` and `COOKIE_SECURE=false` for local HTTP. A
+non-loopback deployment requires an explicitly reviewed HTTPS ingress,
+`COOKIE_SECURE=true`, and matching public URLs; the backend refuses insecure
+cookies on a non-local origin.
 
-## 11. Configure the frontend
+Choose exactly one of the next two paths.
 
-Create its ignored environment file:
+## 4A. Use an existing contract without a transaction
 
-```bash
-cp __frontend/.env.example __frontend/.env
-```
-
-Configure:
+Use this path when the contract is already deployed and its issuer is already
+authorized. Add its public identity to `.env.docker`:
 
 ```dotenv
-VITE_APP_API_URL=http://localhost:4000/api
-VITE_BLOCKCHAIN_API_URL=http://localhost:3000/api
-VITE_CHAIN_ID=11155111
-VITE_CONTRACT_ADDRESS=<NEW_CONTRACT_ADDRESS>
-VITE_ETHERSCAN_BASE_URL=https://sepolia.etherscan.io
-VITE_PUBLIC_APP_URL=http://localhost:5173
-VITE_WALLETCONNECT_PROJECT_ID=<YOUR_PUBLIC_REOWN_PROJECT_ID>
+IMPORT_CONTRACT_ADDRESS=0xYourContractAddress
+IMPORT_DEPLOYMENT_BLOCK=12345678
+IMPORT_ADMINISTRATOR_ADDRESS=0xAdministratorAddress
+IMPORT_ISSUER_ADDRESS=0xAuthorizedIssuerAddress
 ```
 
-`VITE_WALLETCONNECT_PROJECT_ID` may be blank when only browser extensions are
-used. It must be configured to open the mobile-wallet QR modal.
-
-All `VITE_*` values are public. Never place an RPC credential, private key,
-seed phrase, application encryption key, or gateway API key in this file.
-
-Restart Vite whenever a frontend environment value changes.
-
-## 12. Required test gate after configuration
+Run:
 
 ```bash
-npm --prefix backend test
-npm --prefix app-backend test
-npm --prefix __frontend run lint
-npm --prefix __frontend test
-npm --prefix __frontend run build
+docker compose --env-file .env.docker --profile deploy run --rm configure-existing
 ```
 
-These tests do not send another Sepolia write.
+This command performs only read calls. It checks:
 
-All commands must pass with the newly prepared local configuration before the
-application walkthrough. The frontend E2E suite can also be run with:
+1. the RPC reports Sepolia chain ID `11155111`;
+2. live runtime bytecode exactly matches this repository's compiled contract;
+3. the contract's successful creation receipt exists in the exact supplied
+   deployment block;
+4. the supplied administrator holds `ADMIN_ROLE`; and
+5. the supplied issuer is currently authorized.
+
+Do not guess the deployment block when importing a contract.
+
+On success, the command writes validated public runtime and evidence files to
+the named `deployment_state` Docker volume. It never writes a wallet secret.
+
+Inspect the generated public data with:
 
 ```bash
-npm --prefix __frontend run test:e2e
+docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
+  npm run docker:export-deployment
 ```
 
-The deterministic E2E suite uses mocked wallet and service boundaries and does
-not send a Sepolia transaction.
+Continue at [Start the application](#6-start-the-application).
 
-## 13. Start the application
+## 4B. Deploy and authorize a new contract
 
-Open three terminals in the repository root.
+### Transaction scope
 
-Terminal 1:
+This path sends exactly two Sepolia transactions:
+
+1. deploy `PramaanChain` from the administrator wallet; and
+2. authorize the separate issuer wallet from the administrator wallet.
+
+It does not issue or revoke a proof. Those actions remain deliberate
+application demonstrations signed by the selected browser wallet.
+
+### Store deployment secrets
+
+Build the deployment tool image:
 
 ```bash
-npm --prefix backend start
+docker compose --env-file .env.docker --profile deploy build contract-tools
 ```
 
-Terminal 2:
+Store the two wallet private keys in Hardhat's encrypted keystore. Each command
+prompts for the value and the keystore password:
 
 ```bash
-npm --prefix app-backend start
+docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
+  npx hardhat keystore set DEPLOYER_PRIVATE_KEY
+
+docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
+  npx hardhat keystore set ISSUER_PRIVATE_KEY
 ```
 
-Terminal 3:
+The first signer becomes the administrator. The second signer is authorized
+as the issuer. They must be different addresses.
+
+For automatic Etherscan source verification, also run:
 
 ```bash
-npm --prefix __frontend run dev
+docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
+  npx hardhat keystore set ETHERSCAN_API_KEY
 ```
 
-Check:
+These secrets are stored only in the named `hardhat_keystore` Docker volume.
+They are not written to `.env.docker`, `deployment_state`, the frontend, or
+either long-running backend.
+
+### Pre-transaction checklist
+
+Before continuing, confirm:
+
+- both wallets are new, dedicated Sepolia test wallets;
+- the deployer has enough Sepolia ETH;
+- the issuer may have zero ETH until it signs an application write;
+- the RPC is Sepolia, not mainnet or another chain;
+- the named `deployment_state` volume does not already identify a deployment;
+  use `npm run docker:export-deployment` to check; and
+- the checked-out commit is the code you intend to deploy.
+
+### Deploy
 
 ```bash
-curl http://localhost:3000/api/health
-curl http://localhost:4000/api/health
+docker compose --env-file .env.docker --profile deploy run --rm deploy-contract
 ```
 
-Then open <http://localhost:5173>.
+The command:
 
-Both backends fail closed when the RPC chain ID is wrong, the contract address
-has no deployed bytecode, or mandatory configuration is missing.
+1. compiles the production Hardhat profile;
+2. runs all contract tests;
+3. validates chain ID `11155111` and two distinct signers;
+4. deploys the contract and waits for a successful receipt;
+5. validates deployed bytecode and the administrator role;
+6. authorizes the issuer and waits for a successful receipt;
+7. validates issuer authorization;
+8. writes public runtime and evidence files; and
+9. verifies source on Etherscan when its API key is configured.
 
-## 14. Import the demo accounts into a wallet
+Expected public evidence includes:
 
-Import the dedicated administrator and issuer accounts into your browser or
-mobile wallet using that wallet's local account-import flow. Do not put either
-private key in frontend configuration.
+- contract address;
+- deployment block;
+- administrator and issuer addresses;
+- deployment and authorization transaction hashes; and
+- source-verification status.
 
-Enable Sepolia in the wallet. Verify the public address shown by the wallet
-before every signature or transaction:
+Do not expose the contents of the encrypted keystore when sharing evidence.
 
-- administrator must equal the deployment output's `administrator`;
-- issuer must equal the deployment output's `issuer`; and
-- the selected network must be Sepolia.
+### Interrupted deployment recovery
 
-The wallet may display the same accounts on other EVM networks. Their Sepolia
-balance and transaction history are separate from mainnet.
+If the deployment receipt is confirmed but issuer authorization is missing or
+ambiguous, do not rerun the deployment command. Inspect:
 
-## 15. Run the application demonstration
+```bash
+docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
+  npm run docker:export-deployment
+```
 
-### Administrator
+After confirming the recorded contract and wallets, run recovery:
 
-1. Open `/login`.
-2. Select the administrator wallet and sign the SIWE message.
-3. Open **Institutions and issuers**.
-4. Create an institution with a permanent public ID such as `DEMO-UNIVERSITY`.
-5. Enter the issuer address reported by the deployment script.
+```bash
+docker compose --env-file .env.docker --profile deploy run --rm resume-authorization
+```
 
-The deployment script already authorized that issuer. The application checks
-the current role and registers the institution without resending the
-authorization transaction.
+Recovery never deploys another contract. It validates the exact deployed
+bytecode, successful deployment receipt, deployment block, signer addresses,
+administrator role, current issuer role, and the recorded authorization
+transaction and nonce before deciding what to do:
 
-### Citizen
+- an active issuer is finalized without a transaction;
+- a pending transaction is reported and never duplicated;
+- an absent transaction whose nonce is still available is ambiguous and
+  blocked;
+- a successful receipt without the role is inconsistent and blocked; and
+- only a failed receipt, or an absent transaction whose nonce is already
+  consumed, is eligible for a deliberate retry.
 
-Use a separate test wallet. It does not need Sepolia ETH:
+When the evidence status becomes `AUTHORIZATION_RETRY_REQUIRED`, first inspect
+the exported evidence and copy its recorded issuer-authorization transaction
+hash. Then temporarily set both values in `.env.docker`:
 
-1. Sign in with SIWE.
-2. Connect to `DEMO-UNIVERSITY`.
-3. Submit a certificate request.
+```dotenv
+ALLOW_AUTHORIZATION_RESUBMIT=true
+AUTHORIZATION_RETRY_CONFIRMATION=0xExactRecordedAuthorizationTransactionHash
+```
 
-The citizen relationship and request remain private in the local encrypted
-SQLite database.
+Rerun `resume-authorization` once. It will reject a missing or different hash.
+After the retry is confirmed, reset the variables to `false` and blank. If
+recovery reports `AUTHORIZATION_PENDING`, `AUTHORIZATION_AMBIGUOUS`, or
+`AUTHORIZATION_INCONSISTENT`, do not enable retry; investigate the recorded
+transaction and nonce first.
 
-### Issuer
+### Source verification retry
 
-1. Change the wallet account to the authorized issuer.
-2. Sign in again.
-3. Open the pending request.
-4. Select a synthetic certificate file.
-5. Confirm its local SHA-256 digest.
-6. Sign the Sepolia issuance transaction.
-7. Wait until the backend independently confirms the receipt and `ACTIVE`
-   contract status.
+If deployment succeeds but Etherscan verification is skipped or fails, the
+contract and runtime configuration remain valid. Configure the Etherscan key
+if needed, then rerun only verification:
 
-Only the digest is sent to Ethereum. Do not use a real certificate or personal
-data in this testnet demonstration.
+```bash
+docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
+  npm run sepolia:verify -- <CONTRACT_ADDRESS>
+```
 
-### Public verifier
+Do not redeploy merely to retry source verification.
 
-Open the public verifier without signing in:
+## 5. Understand generated state
 
-1. Paste the issued `0x`-prefixed SHA-256 digest, or select the exact same file.
-2. Run verification.
-3. Confirm the result is `ACTIVE` and the issuer matches the new issuer
-   address.
+The `runtime.env` file in the named `deployment_state` volume contains only
+public values:
 
-Changing one file byte creates another hash and normally returns `NOT_FOUND`.
+```dotenv
+BLOCKCHAIN_CHAIN_ID=11155111
+PRAMAAN_CHAIN_ADDRESS=0x...
+PRAMAAN_CHAIN_START_BLOCK=12345678
+ADMINISTRATOR_ADDRESS=0x...
+ISSUER_ADDRESS=0x...
+```
 
-## 16. Common problems
+Compose mounts this volume read-only into all three application services. It
+prevents a contract address from being copied differently between components.
+The files contain only public deployment metadata; application entrypoints
+load only the allowlisted runtime values they require.
 
-### `Chain ID mismatch`
+Use `npm run docker:export-deployment` through `contract-tools` to inspect or
+archive the public runtime and evidence. Do not open or export the encrypted
+keystore.
 
-The RPC is not connected to Sepolia. Use an RPC endpoint that reports
-`11155111`.
+To deliberately replace local runtime metadata with a different validated
+existing deployment, set `ALLOW_RUNTIME_OVERWRITE=true`, update the
+`IMPORT_*` values, and rerun `configure-existing`. Leave
+`ALLOW_RUNTIME_OVERWRITE=false` during normal operation.
 
-### `No bytecode at ...`
+`ALLOW_NEW_DEPLOYMENT=true` removes only the local guard against replacing
+runtime metadata; it does not make another Sepolia deployment safe. Use it
+only after deliberately archiving the existing public evidence and deciding
+to create a separate contract.
 
-One component contains the wrong contract address, or the RPC points to
-another chain. Copy the address exactly from the deployment output.
+## 6. Start the application
 
-### Event index is degraded
+Build and start the default services:
 
-Confirm `PRAMAAN_CHAIN_START_BLOCK` matches the new deployment block and that
-the RPC supports historical `eth_getLogs`.
+```bash
+docker compose --env-file .env.docker up --build -d
+```
 
-### Login succeeds with the wrong role
+Check readiness:
 
-Confirm the selected wallet address. Administrator role comes from the new
-contract. Issuer role requires both on-chain authorization and the local
-institution registration.
+```bash
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs --tail=100 gateway app-backend frontend
+```
 
-### SIWE domain or CORS error
+Open:
 
-For the npm development setup, use `http://localhost:5173` consistently in
-`APP_ORIGIN`, `SIWE_DOMAIN`, `CORS_ALLOWED_ORIGINS`, and the browser URL.
-Do not mix `localhost` with `127.0.0.1`.
+| Service | URL |
+| --- | --- |
+| Frontend | <http://localhost:5173> |
+| Gateway health | <http://localhost:3000/api/health> |
+| Private backend health | <http://localhost:4000/api/health> |
 
-### Mobile QR does not open
+All published ports bind to loopback by default. The application services use
+read-only root filesystems, dropped Linux capabilities,
+`no-new-privileges`, and non-root users. Writable data is limited to named
+volumes and tightly scoped temporary filesystems.
 
-Set `VITE_WALLETCONNECT_PROJECT_ID`, restart the frontend, and reload the login
-page.
+The private backend creates a random encryption key on first start and stores
+it with the SQLite database in the persistent `app_data` volume. Container
+recreation therefore does not make existing encrypted rows unreadable.
 
-### Transaction submitted but the command stopped
+The gateway may report a degraded event index if the selected RPC cannot query
+historical logs from the deployment block. Direct contract verification is
+separate and can remain healthy. Use an RPC with historical `eth_getLogs`
+support for a complete index.
 
-Do not immediately rerun the deployment. Inspect the reported transaction
-hashes, account nonce, Etherscan receipts, and current contract state first. A
-retry may create another independent contract or duplicate an intended write.
+## 7. Test the running application
 
-## 17. Stop and preserve the demo
+Confirm the landing page, login page, and verifier load. Then:
 
-Stop each npm process with `Ctrl+C`.
+1. Sign in with the administrator wallet.
+2. Register an institution using the authorized issuer address.
+3. Switch to the issuer wallet and sign in.
+4. Connect a separate citizen wallet and submit a certificate request.
+5. Hash the exact certificate file in the issuer workspace.
+6. Review the transaction in the wallet before signing issuance.
+7. Wait for the private backend to confirm the receipt and active status.
+8. Verify the same file or its SHA-256 hash through the public verifier.
 
-The local SQLite database is under `app-backend/.data/` and is ignored by Git.
-Deleting it removes local relationships and sessions but does not change
-Sepolia.
+The verifier hashes files in the browser; the original file is not uploaded.
+Public verification and SIWE login require no gas. Issuance and revocation are
+Sepolia transactions.
 
-Sepolia contracts and transactions are public and permanent. Record the
-contract address, deployment block, wallet public addresses, commit SHA, and
-Etherscan links. Never record private keys, seed phrases, RPC credentials, or
-the application encryption key.
+To run the browser E2E suite against the containers:
+
+```bash
+E2E_EXTERNAL_SERVER=1 E2E_BASE_URL=http://127.0.0.1:5173 \
+  npm --prefix __frontend run test:e2e
+```
+
+This E2E command requires the frontend development dependencies on the host.
+The application itself does not.
+
+## 8. Restart and stop
+
+Restart without deploying:
+
+```bash
+docker compose --env-file .env.docker up -d
+```
+
+Stop containers while preserving state:
+
+```bash
+docker compose --env-file .env.docker down
+```
+
+Remove containers and all local Docker volumes, including profile-gated
+deployment state:
+
+```bash
+docker compose --env-file .env.docker --profile deploy down -v
+```
+
+`down -v` permanently removes the local SQLite database, its application
+encryption key, gateway state, public deployment evidence, and the encrypted
+Hardhat keystore. It does not remove or alter the Sepolia contract.
+
+## 9. Troubleshooting
+
+### Runtime state is missing
+
+Run exactly one configuration phase:
+
+- `configure-existing` for a deployed and authorized contract; or
+- `deploy-contract` for a new teammate-owned contract.
+
+Do not hand-edit generated runtime metadata.
+
+### SOURCE_COMMIT is rejected or cannot be fetched
+
+Use the complete output of `git rev-parse HEAD`, not a branch name, short SHA,
+or `local`. Push that commit to the configured GitHub repository before
+building the deployment profile. The remote, commit-pinned build is
+intentional: a deployment must not claim unreviewable local changes.
+
+### Runtime deployment already exists
+
+The guard is preventing an accidental second deployment or inconsistent
+import. If the recorded contract is correct, simply run the application.
+
+### Wrong chain ID
+
+The RPC is not Sepolia. Replace `SEPOLIA_RPC_URL`; never bypass the chain-ID
+check.
+
+### Historical state or logs are unavailable
+
+Use a Sepolia RPC provider that supports `eth_getLogs` from the deployment
+block. Full-range historical logs are required for the gateway index, although
+the read-only import can validate a deployment from its block and transaction
+receipts.
+
+### WalletConnect QR is unavailable
+
+Set a valid public `VITE_WALLETCONNECT_PROJECT_ID` in `.env.docker`, then
+recreate the frontend:
+
+```bash
+docker compose --env-file .env.docker up --build -d frontend
+```
+
+### Port already in use
+
+Change `FRONTEND_PORT`, `GATEWAY_PORT`, or `APP_BACKEND_PORT` in
+`.env.docker`. If the browser-facing backend ports change, update the frontend
+runtime URLs in `compose.yaml` or expose matching local ports.
+
+## 10. Manual npm alternative
+
+Direct npm development remains supported and is useful while changing code.
+Install each workspace, copy each component's `.env.example`, run its tests,
+and start the three processes separately. The exact commands are summarized
+in the [root README](../README.md).
+
+The legacy `npm run sepolia:deploy-demo` command sends four transactions for a
+full synthetic deploy/authorize/issue/revoke lifecycle. The Docker onboarding
+path intentionally sends only deploy and authorize.
+
+## 11. Completion checklist
+
+A teammate has completed this guide when:
+
+- the selected Sepolia contract identity is validated;
+- the administrator and issuer are different test-only wallets;
+- a new deployment, if chosen, has exactly two successful setup
+  transactions;
+- the `deployment_state` runtime is generated and consistent across services;
+- all three containers are healthy;
+- no private key is present in application container environments;
+- the frontend, login, dashboard, and public verifier load;
+- a synthetic certificate can be issued and verified; and
+- no personal certificate data or secret is committed or shared.

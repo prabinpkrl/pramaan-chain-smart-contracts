@@ -40,19 +40,25 @@ test("multiple injected wallets are discovered and the chosen provider is used",
   await expect(page.getByText(`${ADDRESSES.issuer.slice(0, 6)}...${ADDRESSES.issuer.slice(-4)}`)).toBeVisible();
 });
 
-test("configured mobile login opens the WalletConnect QR modal", async ({ page }, testInfo) => {
+test("configured mobile login opens the appropriate WalletConnect chooser", async ({ page }, testInfo) => {
   await mockApis(page);
   await page.goto("/login");
 
-  if (await page.getByText(
-    "Mobile QR requires WalletConnect configuration for this deployment.",
-  ).isVisible()) {
+  const walletConnectProjectId = await page.evaluate(
+    () => window.__PRAMAAN_CONFIG__?.walletConnectProjectId || "",
+  );
+  if (!walletConnectProjectId) {
     test.skip(true, "WalletConnect project ID is not configured for this build");
   }
 
   await page.getByRole("button", { name: /Connect mobile wallet/ }).click();
   await expect(page.locator("w3m-modal")).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator("wui-qr-code")).toBeVisible({ timeout: 15_000 });
+  if (testInfo.project.name === "mobile-chromium") {
+    await expect(page.getByText("All Wallets")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByPlaceholder("Search wallet")).toBeVisible();
+  } else {
+    await expect(page.locator("wui-qr-code")).toBeVisible({ timeout: 15_000 });
+  }
   await expect(page.getByText("Mobile QR login is not configured for this environment yet.")).toHaveCount(0);
   await page.screenshot({
     path: testInfo.outputPath("walletconnect-qr.png"),

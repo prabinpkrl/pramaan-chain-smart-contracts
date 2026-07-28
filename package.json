@@ -11,8 +11,13 @@
     "local:node": "hardhat node",
     "local:deploy": "hardhat run scripts/deploy.js --network localhost",
     "local:demo": "hardhat run scripts/demo.js --network localhost",
+    "sepolia:deploy-authorize": "hardhat run scripts/deploy-and-authorize.js --network sepolia --build-profile production",
+    "sepolia:resume-authorize": "hardhat run scripts/resume-authorization.js --network sepolia --build-profile production",
     "sepolia:deploy-demo": "hardhat run scripts/demo.js --network sepolia --build-profile production",
     "sepolia:verify": "hardhat verify etherscan --network sepolia --build-profile production",
+    "docker:deploy": "node scripts/docker-deploy.js",
+    "docker:configure-existing": "node scripts/configure-existing.js",
+    "docker:export-deployment": "node scripts/export-deployment.js",
     "clean": "hardhat clean"
   },
   "engines": {

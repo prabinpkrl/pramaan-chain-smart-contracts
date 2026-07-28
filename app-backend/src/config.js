@@ -18,6 +18,11 @@ function integer(env, name, fallback, minimum = 1) {
 export function loadConfig(env = process.env) {
   const appOrigin = env.APP_ORIGIN?.trim() || "http://localhost:5173";
   const parsedOrigin = new URL(appOrigin);
+  const cookieSecure = env.COOKIE_SECURE === "true";
+  const localHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
+  if (!cookieSecure && !localHosts.has(parsedOrigin.hostname)) {
+    throw new Error("COOKIE_SECURE must be true when APP_ORIGIN is not local");
+  }
   const encryptionKey = Buffer.from(required(env, "APP_DATA_ENCRYPTION_KEY"), "base64");
   if (encryptionKey.length !== 32) {
     throw new Error("APP_DATA_ENCRYPTION_KEY must decode to exactly 32 bytes");
@@ -42,7 +47,7 @@ export function loadConfig(env = process.env) {
     rpcUrl: required(env, "SEPOLIA_RPC_URL"),
     chainId: integer(env, "BLOCKCHAIN_CHAIN_ID", 11155111),
     contractAddress,
-    cookieSecure: env.COOKIE_SECURE === "true",
+    cookieSecure,
     nonceTtlMs: 5 * 60 * 1000,
     sessionTtlMs: 8 * 60 * 60 * 1000,
   };

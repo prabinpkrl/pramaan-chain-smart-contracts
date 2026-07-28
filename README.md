@@ -5,174 +5,69 @@ anchor SHA-256 document hashes, and anyone can check whether a matching proof
 is active, revoked, or unknown. Certificate files and citizen personal data
 remain off-chain.
 
-This repository contains the complete prototype:
+This repository contains:
 
 - a Solidity and Hardhat smart contract;
 - a public Express blockchain gateway and event index;
 - a private Express, SIWE, encrypted-SQLite application backend; and
 - a React/Vite public verifier plus administrator, issuer, and citizen portals.
 
-The project uses Ethereum Sepolia for application development. A teammate can
-deploy a new contract from this repository and become the administrator of
-that independent deployment; they do not need access to the original project
-administrator wallet.
+The recommended local workflow uses Docker Compose. A teammate can either
+deploy a separate Sepolia contract with their own test-only administrator and
+issuer wallets, or validate and use an existing deployment. The normal
+application containers never receive either wallet's private key.
 
 ## Start here
 
 | Goal | Guide |
 | --- | --- |
-| Deploy and run an independent Sepolia demo after cloning | [`docs/demo.md`](docs/demo.md) |
+| Deploy or import a contract and run the complete application | [`docs/demo.md`](docs/demo.md) |
 | Understand components and trust boundaries | [`docs/system-architecture.md`](docs/system-architecture.md) |
-| Browse every current and historical document | [`docs/README.md`](docs/README.md) |
-| Configure the complete application | [`docs/FRONTEND_APPLICATION.md`](docs/FRONTEND_APPLICATION.md) |
-| Use the public blockchain API | [`docs/BACKEND_API.md`](docs/BACKEND_API.md) |
+| Browse all documentation | [`docs/README.md`](docs/README.md) |
+| Configure the private application and API | [`docs/FRONTEND_APPLICATION.md`](docs/FRONTEND_APPLICATION.md) |
+| Use the public blockchain gateway | [`docs/BACKEND_API.md`](docs/BACKEND_API.md) |
 | Understand the contract interface | [`docs/CONTRACT_DESIGN.md`](docs/CONTRACT_DESIGN.md) |
-
-The independent demo guide is the recommended onboarding path for a teammate,
-reviewer, or mentor.
 
 ## Requirements
 
+For the recommended workflow:
+
 - Git
-- Node.js `22.13.0` or newer
-- npm
-- A browser wallet that supports Sepolia
-- A Sepolia RPC endpoint
-- Two new test-only Ethereum accounts for an independent deployment
-- Sepolia ETH for those test-only accounts
-- An Etherscan API key if source verification is required
+- Docker Engine with the Compose plugin
+- a Sepolia RPC endpoint
+- two different, test-only Ethereum accounts and enough Sepolia ETH if
+  deploying a new contract
+- an optional Etherscan API key for source verification
 
-Docker is not used in the current workflow.
+Node.js `22.13.0` or newer and npm are needed only for the manual development
+workflow. Never use a personal or mainnet wallet, and never commit or share a
+private key or seed phrase.
 
-Never use a personal or mainnet wallet. Never commit or share a private key or
-seed phrase.
+## Quick start with an existing deployment
 
-## Clone and install
+Clone the repository and prepare the ignored Docker configuration:
 
 ```bash
 git clone https://github.com/prabinpkrl/pramaan-chain-smart-contracts.git
 cd pramaan-chain-smart-contracts
-
-npm ci
-npm --prefix backend ci
-npm --prefix app-backend ci
-npm --prefix __frontend ci
+cp .env.docker.example .env.docker
 ```
 
-Each component has its own lockfile and dependency installation.
-
-## Verify the repository
-
-Run the contract checks:
+Copy the full commit printed by `git rev-parse HEAD` into `SOURCE_COMMIT` in
+`.env.docker`. The commit must already be pushed to this GitHub repository:
+the one-shot contract image is built from that exact remote revision and
+records it as image and deployment provenance. Also set `SEPOLIA_RPC_URL` and
+the four `IMPORT_*` values, then run the read-only validator:
 
 ```bash
-npm run compile
-npm test
+docker compose --env-file .env.docker --profile deploy run --rm configure-existing
+docker compose --env-file .env.docker up --build -d
 ```
 
-Run the service and frontend checks:
-
-```bash
-npm --prefix backend test
-npm --prefix app-backend test
-npm --prefix __frontend run lint
-npm --prefix __frontend test
-npm --prefix __frontend run build
-```
-
-Compilation generates the contract artifact and ABI at:
-
-```text
-artifacts/contracts/PramaanChain.sol/PramaanChain.json
-```
-
-Generated artifacts, dependencies, databases, build output, keystore material,
-and `.env` files are ignored by Git.
-
-## Independent Sepolia deployment
-
-The checked deployment command uses two signers:
-
-1. account 0 deploys the contract and receives `ADMIN_ROLE`;
-2. account 1 is authorized as an issuer.
-
-It then issues and revokes one synthetic proof so the complete lifecycle is
-checked against the new deployment:
-
-```bash
-npm run sepolia:deploy-demo
-```
-
-This command sends four Sepolia transactions and requires deliberate
-test-wallet and RPC configuration. Follow
-[`docs/demo.md`](docs/demo.md) before running it. The guide uses Hardhat's
-encrypted keystore by default and explains the optional gitignored `.env`
-fallback.
-
-The command reports the new contract address, deployment block, administrator,
-issuer, transaction hashes, and checked statuses. Use that new address and
-block in every component's local environment configuration.
-
-## Configure the application
-
-After deploying an independent contract, create these ignored files:
-
-```bash
-cp backend/.env.example backend/.env
-cp app-backend/.env.example app-backend/.env
-cp __frontend/.env.example __frontend/.env
-```
-
-The same deployment values must be used everywhere:
-
-| Value | Gateway | Application backend | Frontend |
-| --- | --- | --- | --- |
-| Chain ID `11155111` | `BLOCKCHAIN_CHAIN_ID` | `BLOCKCHAIN_CHAIN_ID` | `VITE_CHAIN_ID` |
-| New contract address | `PRAMAAN_CHAIN_ADDRESS` | `PRAMAAN_CHAIN_ADDRESS` | `VITE_CONTRACT_ADDRESS` |
-| Deployment block | `PRAMAAN_CHAIN_START_BLOCK` | Not used | Not used |
-| Sepolia RPC | `SEPOLIA_RPC_URL` | `SEPOLIA_RPC_URL` | Never exposed |
-
-The gateway should remain read-only for the browser-wallet application:
-
-```dotenv
-ISSUER_ADDRESS=
-ISSUER_PRIVATE_KEY=
-WRITE_API_KEY=
-```
-
-Administrator and issuer writes are signed by the selected browser or mobile
-wallet. No administrator or issuer key belongs in either application backend
-or the frontend.
-
-The private application backend additionally requires a new local
-`APP_DATA_ENCRYPTION_KEY`. The frontend may use
-`VITE_WALLETCONNECT_PROJECT_ID` to enable mobile-wallet QR login. All
-`VITE_*` values are public browser configuration.
-
-See [`docs/demo.md`](docs/demo.md) for exact values and setup order.
-
-## Run the complete application
-
-After the three component `.env` files are configured, open three terminals
-from the repository root.
-
-Terminal 1 — public blockchain gateway:
-
-```bash
-npm --prefix backend start
-```
-
-Terminal 2 — private application backend:
-
-```bash
-npm --prefix app-backend start
-```
-
-Terminal 3 — frontend:
-
-```bash
-npm --prefix __frontend run dev
-```
+The import checks Sepolia chain ID `11155111`, exact runtime bytecode, the
+successful contract-creation receipt in the supplied deployment block, the
+administrator role, and the issuer's current authorization. It sends no
+transaction.
 
 Open:
 
@@ -180,62 +75,187 @@ Open:
 | --- | --- |
 | Frontend | <http://localhost:5173> |
 | Gateway health | <http://localhost:3000/api/health> |
-| Application health | <http://localhost:4000/api/health> |
+| Private application health | <http://localhost:4000/api/health> |
 
-The startup order matters because both backends validate the configured
-network and deployed bytecode before serving the application.
+Inspect or stop the stack with:
+
+```bash
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs -f
+docker compose --env-file .env.docker down
+```
+
+## Deploy a teammate-owned Sepolia contract
+
+The deployment phase is deliberately separate from application startup. It
+sends exactly two transactions:
+
+1. deploy `PramaanChain`; and
+2. authorize the separate issuer wallet.
+
+Store both keys in the persistent, encrypted Hardhat keystore volume:
+
+```bash
+docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
+  npx hardhat keystore set DEPLOYER_PRIVATE_KEY
+
+docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
+  npx hardhat keystore set ISSUER_PRIVATE_KEY
+```
+
+Optionally store an Etherscan key:
+
+```bash
+docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
+  npx hardhat keystore set ETHERSCAN_API_KEY
+```
+
+Run the checked deployment:
+
+```bash
+docker compose --env-file .env.docker --profile deploy run --rm deploy-contract
+```
+
+Before sending a transaction, this command compiles the production profile and
+runs the contract tests. It writes public runtime metadata and transaction
+evidence to the named `deployment_state` Docker volume. The files are shared
+read-only with the application containers and are not affected by the host
+user's UID.
+
+Inspect the public metadata without exposing the keystore:
+
+```bash
+docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
+  npm run docker:export-deployment
+```
+
+If runtime metadata already exists, do not deploy again. Start the application
+directly:
+
+```bash
+docker compose --env-file .env.docker up --build -d
+```
+
+If source verification was skipped, add the Etherscan key and run:
+
+```bash
+docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
+  npm run sepolia:verify -- <CONTRACT_ADDRESS>
+```
+
+If deployment was confirmed but issuer authorization was interrupted, export
+and inspect the recorded evidence first. Recovery always checks the exact
+bytecode, deployment receipt, administrator role, current issuer role,
+recorded authorization receipt/transaction, and administrator nonce:
+
+```bash
+docker compose --env-file .env.docker --profile deploy run --rm resume-authorization
+```
+
+It finalizes an already successful authorization, waits when the original
+transaction is pending, and blocks when its outcome is ambiguous. It can retry
+only after proving the original failed or its nonce was consumed, and only
+after the operator explicitly confirms the exact recorded transaction hash.
+See the recovery procedure in the demo guide.
+
+Follow the complete safety checks and troubleshooting procedure in
+[`docs/demo.md`](docs/demo.md).
+
+## Docker trust and persistence
+
+- `contract-tools`, `deploy-contract`, `resume-authorization`, and
+  `configure-existing` are one-shot services behind the `deploy` profile.
+- The administrator key, issuer key, and optional Etherscan key exist only in
+  the encrypted `hardhat_keystore` Docker volume used by those services.
+- The gateway runs read-only; its issuer key and write API key are explicitly
+  blank.
+- The private backend generates a random application-data encryption key on
+  first start and stores it beside its SQLite database in the `app_data`
+  volume.
+- The frontend receives only public runtime configuration.
+- Published ports bind to `127.0.0.1` by default. Non-local access requires a
+  separately reviewed HTTPS ingress and secure cookies.
+- Long-running containers use read-only filesystems, dropped capabilities,
+  `no-new-privileges`, and non-root users.
+- `docker compose down` preserves database and keystore volumes.
+- `docker compose --profile deploy down -v` permanently removes the local
+  database, application encryption key, gateway state, public deployment
+  evidence, and encrypted deployment keystore. It does not change anything
+  already deployed on Sepolia.
 
 ## Application walkthrough
 
 For a newly deployed contract:
 
-1. Sign in with the administrator account that deployed the contract.
-2. Open **Institutions and issuers** and register an institution with the
-   authorized issuer address reported by the deployment command.
-3. Change to the issuer account and sign in to the issuer workspace.
-4. Use a separate wallet as a citizen, connect it to the institution's public
-   ID, and submit a certificate request.
-5. Return to the issuer account, hash the exact certificate file in the
-   browser, and sign the issuance transaction.
-6. Verify the same file or its SHA-256 hash through the public verifier.
+1. Sign in with the administrator wallet that deployed the contract.
+2. Open **Institutions and issuers** and register an institution using the
+   authorized issuer address.
+3. Change to the issuer wallet and sign in to its workspace.
+4. Use another wallet as a citizen, connect it to the institution's public ID,
+   and submit a certificate request.
+5. Return to the issuer, hash the exact certificate file in the browser, and
+   sign the issuance transaction.
+6. Verify the same file or SHA-256 hash through the public verifier.
 
 Citizen login and public verification do not require gas. Issuance,
 revocation, and administrator authorization are Sepolia transactions.
 
-## Local contract development
+## Manual npm development
 
-For contract development without Sepolia, start a local Hardhat network:
+Docker is recommended for the full application. For direct development:
+
+```bash
+npm ci
+npm --prefix backend ci
+npm --prefix app-backend ci
+npm --prefix __frontend ci
+
+npm run compile
+npm test
+npm --prefix backend test
+npm --prefix app-backend test
+npm --prefix __frontend run lint
+npm --prefix __frontend test
+npm --prefix __frontend run build
+```
+
+Create the component `.env` files from their examples, then start the gateway,
+application backend, and frontend in separate terminals:
+
+```bash
+npm --prefix backend start
+npm --prefix app-backend start
+npm --prefix __frontend run dev
+```
+
+For local contract work, use:
 
 ```bash
 npm run local:node
-```
-
-In another terminal:
-
-```bash
 npm run local:deploy
-# or
-npm run local:demo
+# or: npm run local:demo
 ```
 
-Local Hardhat accounts and state disappear when the local node is reset. Never
-reuse its printed development private keys on Sepolia or mainnet.
+The older `npm run sepolia:deploy-demo` command performs a complete synthetic
+four-transaction lifecycle. The Docker onboarding flow intentionally uses
+`sepolia:deploy-authorize` and only sends the two transactions needed to
+configure the application.
 
 ## Main commands
 
 | Command | Purpose |
 | --- | --- |
+| `docker compose --env-file .env.docker up --build -d` | Build and start the application |
+| `docker compose --env-file .env.docker --profile deploy run --rm deploy-contract` | Test, deploy, authorize, and optionally verify |
+| `docker compose --env-file .env.docker --profile deploy run --rm configure-existing` | Validate and import an existing deployment without a write |
 | `npm run compile` | Compile Solidity and generate the ABI artifact |
 | `npm test` | Run contract tests |
 | `npm run coverage` | Run Solidity coverage |
 | `npm run local:node` | Start a persistent local Hardhat node |
 | `npm run local:deploy` | Deploy a fresh contract locally |
 | `npm run local:demo` | Run the checked local lifecycle |
-| `npm run sepolia:deploy-demo` | Deploy and exercise an independent Sepolia contract |
-| `npm run sepolia:verify -- <address>` | Verify source for a Sepolia deployment |
-| `npm --prefix backend start` | Start the public gateway |
-| `npm --prefix app-backend start` | Start the private application backend |
-| `npm --prefix __frontend run dev` | Start the frontend development server |
+| `npm run sepolia:deploy-authorize` | Deploy and authorize only |
+| `npm run sepolia:verify -- <address>` | Verify source on Etherscan |
 
 ## Documentation
 
@@ -248,7 +268,7 @@ reuse its printed development private keys on Sepolia or mainnet.
 
 ### Application and APIs
 
-- [Independent Sepolia demo](docs/demo.md)
+- [Independent Docker demo](docs/demo.md)
 - [Application setup and private API](docs/FRONTEND_APPLICATION.md)
 - [Frontend implementation](docs/FRONTEND_INTEGRATION.md)
 - [Frontend package guide](__frontend/README.md)
@@ -273,9 +293,9 @@ configuration for a teammate's independent deployment.
   must never be stored on-chain.
 - Wallet connection is not authentication; login requires a separate SIWE
   signature.
-- Browser hashing uses the exact file bytes and sends only the digest.
-- The application backend derives roles from current blockchain and private
-  database state; it never trusts a frontend-selected role.
+- Browser hashing uses exact file bytes and sends only the digest.
+- The backend derives roles from current blockchain and private database
+  state; it never trusts a frontend-selected role.
 - Public-network writes must use synthetic data and test-only wallets.
 - Ethereum mainnet and production deployment remain outside this prototype.
 

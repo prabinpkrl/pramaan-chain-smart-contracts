@@ -10,7 +10,7 @@ guides for present-day setup and integration.
 | Document | Purpose |
 | --- | --- |
 | [`../README.md`](../README.md) | Repository overview, setup, roles, deployment identity, and boundaries |
-| [`demo.md`](demo.md) | Fresh-clone independent Sepolia deployment and full npm application startup |
+| [`demo.md`](demo.md) | Docker-first fresh-clone setup, safe existing-deployment import, independent Sepolia deployment, recovery, and application walkthrough |
 | [`system-architecture.md`](system-architecture.md) | Architecture source of truth, trust boundaries, actors, and flows |
 | [`CONTRACT_DESIGN.md`](CONTRACT_DESIGN.md) | Contract interface, roles, errors, events, and state transitions |
 | [`BACKEND_API.md`](BACKEND_API.md) | Public blockchain gateway configuration and REST API |

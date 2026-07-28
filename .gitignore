@@ -10,5 +10,9 @@ app-backend/.data/
 .env
 .env.*
 !.env.example
+!.env.docker.example
+
+.docker-state/*
+!.docker-state/.gitkeep
 
 *.log

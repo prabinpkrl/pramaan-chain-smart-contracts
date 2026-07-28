@@ -1,8 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const live = process.env.LIVE_E2E === "1";
+const externalServer = process.env.E2E_EXTERNAL_SERVER === "1";
 const frontendPort = process.env.E2E_FRONTEND_PORT || "5173";
-const frontendUrl = `http://localhost:${frontendPort}`;
+const frontendUrl = process.env.E2E_BASE_URL || `http://localhost:${frontendPort}`;
 
 const frontendServer = {
   command: `npm run preview -- --host 127.0.0.1 --port ${frontendPort}`,
@@ -33,8 +34,10 @@ export default defineConfig({
         { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] } },
         { name: "mobile-chromium", use: { ...devices["Pixel 7"] } },
       ],
-  webServer: live
-    ? [
+  webServer: externalServer
+    ? undefined
+    : live
+      ? [
         {
           command: "npm --prefix ../backend start",
           url: "http://localhost:3000/api/health",
@@ -53,6 +56,6 @@ export default defineConfig({
         },
         frontendServer,
       ]
-    : frontendServer,
+      : frontendServer,
   outputDir: "test-results",
 });
