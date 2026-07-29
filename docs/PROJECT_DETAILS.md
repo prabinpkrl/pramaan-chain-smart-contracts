@@ -41,22 +41,11 @@ Credential and certificate fraud is a growing global problem. Fake diplomas, for
 
 ## Solution
 
-PramaanChain addresses these problems through a **decentralized, privacy-preserving certificate verification protocol** built on Ethereum smart contracts.
+PramaanChain addresses these problems through a **decentralized, privacy-preserving certificate verification protocol** built on Ethereum smart contracts. By anchoring cryptographic proofs on-chain while keeping all personal data off-chain in encrypted private databases, PramaanChain achieves both transparency and privacy.
 
-### Architecture
+### System Architecture
 
-```
-React Frontend (Vite)
-    |
-    +-- Public Verifier --> Blockchain Gateway (Express, port 3000)
-    |                              |
-    |                              +--> PramaanChain Contract (Ethereum Sepolia)
-    |
-    +-- Issuer/Admin/Citizen Portals --> Private Application Backend (Express, port 4000)
-                                              |
-                                              +--> PramaanChain Contract
-                                              +--> Encrypted SQLite Database
-```
+![System Architecture](image.png)
 
 ### Four Security Components
 
@@ -68,6 +57,8 @@ React Frontend (Vite)
 ---
 
 ## How It Solves the Problem
+
+PramaanChain eliminates single points of failure by distributing trust across the Ethereum network. No single institution, database, or administrator can tamper with, delete, or alter certificate records once issued. The protocol enforces a strict lifecycle for every credential, ensuring integrity from issuance through verification.
 
 ### Issuance Flow
 
@@ -146,13 +137,4 @@ React Frontend (Vite)
   - **Issuer Portal**: Institution employees issue and revoke certificates using browser wallet signing.
   - **Citizen Portal**: Citizens connect wallet, link to an institution, and submit certificate requests.
   - **Administrator Portal**: Manages institutions and issuer authorizations.
-- **EIP-6963** browser wallet discovery and **WalletConnect** mobile wallet QR login.
-- **Browser-side SHA-256 hashing**: Exact raw bytes of the certificate file are hashed in the browser; only the digest crosses the network.
-- **React 19 + Vite 8** with **Tailwind CSS 4** and **Motion** animations.
 
-### Testing & Quality
-
-- **Contract tests**: 30+ test cases covering all 17 business rules, role management, issuance, lookup, revocation, privacy boundary, event structure, and immutability.
-- **Network safety tests**: Ensures only localhost (31337) and Sepolia (11155111) chain IDs are allowed.
-- **Backend and app-backend tests**: Unit and API tests for both services.
-- **Frontend tests**: Unit tests (Vitest + Testing Library), lint (ESLint), production build, and E2E tests (Playwright).
