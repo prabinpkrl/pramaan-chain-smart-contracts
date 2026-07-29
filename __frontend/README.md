@@ -104,7 +104,7 @@ deterministic and cannot broadcast a transaction. The live suite uses the
 configured gateway only for health and public certificate verification; it
 does not call a write endpoint or request a wallet signature.
 
-For complete startup, security, workflow, and API details, see
-[`../docs/FRONTEND_APPLICATION.md`](../docs/FRONTEND_APPLICATION.md). The
-implemented route and service integration is documented in
-[`../docs/FRONTEND_INTEGRATION.md`](../docs/FRONTEND_INTEGRATION.md).
+For the implemented routes, browser-wallet flows, and trust boundaries, see
+[`../docs/FRONTEND_ARCHITECTURE.md`](../docs/FRONTEND_ARCHITECTURE.md).
+Complete service endpoints are listed in
+[`../docs/BACKEND_API.md`](../docs/BACKEND_API.md).

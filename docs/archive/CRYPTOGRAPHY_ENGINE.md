@@ -1,4 +1,4 @@
-# PramaanChain Cryptographic and Blockchain Boundary
+# PramaanChain Cryptographic and Blockchain Boundary (Archived)
 
 ## 1. Current implementation
 
@@ -152,6 +152,7 @@ require separate design and explicit authorization.
 
 For the contract interface see
 [`CONTRACT_DESIGN.md`](CONTRACT_DESIGN.md). For gateway behavior see
-[`BACKEND_API.md`](BACKEND_API.md). For the implemented private and browser
-flow see [`FRONTEND_APPLICATION.md`](FRONTEND_APPLICATION.md) and
+[`BACKEND_ARCHITECTURE_AND_API.md`](BACKEND_ARCHITECTURE_AND_API.md). For the
+implemented private and browser
+flow see [`APPLICATION_GUIDE.md`](APPLICATION_GUIDE.md) and
 [`FRONTEND_INTEGRATION.md`](FRONTEND_INTEGRATION.md).

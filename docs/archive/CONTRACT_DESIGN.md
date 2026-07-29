@@ -1,4 +1,4 @@
-# PramaanChain Contract Design Specification
+# PramaanChain Contract Design Specification (Archived)
 
 ## 1. Status and scope
 

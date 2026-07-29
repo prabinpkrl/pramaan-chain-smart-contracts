@@ -1,4 +1,4 @@
-# PramaanChain Blockchain System Architecture
+# PramaanChain Full System Architecture (Archived)
 
 ## 1. Purpose
 
@@ -18,7 +18,7 @@ remaining deferred features are not part of this prototype.
 
 This file is the versioned architecture source of truth. The independently
 controlled Sepolia reproduction procedure is defined in
-[`demo.md`](demo.md).
+[`DOCKER_DEMO.md`](../DOCKER_DEMO.md).
 
 ## 2. Current Status and Confirmed Technology
 
@@ -390,7 +390,7 @@ workflow is documented at
 
 The recommended Docker workflow stores `DEPLOYER_PRIVATE_KEY` and the optional
 `ETHERSCAN_API_KEY` only in the named encrypted `hardhat_keystore` volume.
-`.env.docker` supplies the RPC and public application settings but must never
+`.env` supplies the RPC and public application settings but must never
 contain wallet keys. Only the one-shot services behind Compose's `deploy`
 profile mount the keystore. The long-running gateway, private backend, and
 frontend do not mount it and do not receive wallet keys through their
@@ -714,7 +714,7 @@ application startup:
 
 ```mermaid
 flowchart TD
-    CLONE["Clone, select a pushed full commit SHA, and create ignored .env.docker"] --> CHOOSE{"Contract already deployed?"}
+    CLONE["Clone, select a pushed full commit SHA, and create ignored .env"] --> CHOOSE{"Contract already deployed?"}
     CHOOSE -->|"Yes"| IMPORT["Read-only import and exact deployment validation"]
     CHOOSE -->|"No"| KEYS["Store the test administrator key in the encrypted Docker volume"]
     KEYS --> TEST1["Compile production profile and run contract tests"]
@@ -778,7 +778,8 @@ of the host user's UID. Removing Compose volumes destroys those local values
 but does not alter Sepolia.
 
 The exact Docker and manual npm commands, placeholders, recovery rules, and
-application walkthrough are maintained in [`demo.md`](demo.md). Running the
+application walkthrough are maintained in
+[`DOCKER_DEMO.md`](../DOCKER_DEMO.md). Running the
 state-changing deployment profile is an explicit operator action; normal
 application startup never enters that profile.
 
@@ -834,20 +835,23 @@ blockchain/
 │   └── network-safety.js
 ├── docs/
 │   ├── README.md
-│   ├── demo.md
-│   ├── system-architecture.md
-│   ├── BACKEND_HANDOFF.md
-│   ├── BACKEND_API.md
+│   ├── DOCKER_DEMO.md
+│   ├── SYSTEM_ARCHITECTURE.md
+│   ├── APPLICATION_GUIDE.md
+│   ├── CONTRACT_GATEWAY_INTEGRATION.md
+│   ├── BACKEND_ARCHITECTURE_AND_API.md
 │   ├── BACKEND_SAMPLES.md
 │   ├── CONTRACT_DESIGN.md
 │   ├── CRYPTOGRAPHY_ENGINE.md
-│   ├── FRONTEND_APPLICATION.md
 │   ├── FRONTEND_INTEGRATION.md
-│   ├── SEPOLIA_DEPLOYMENT.md
-│   ├── SEPOLIA_PREPARATION.md
-│   ├── STAGE10_VALIDATION.md
-│   ├── STAGE8_DEMONSTRATION.md
-│   └── STAGE9_VALIDATION.md
+│   └── archive/
+│       ├── README.md
+│       ├── CRYPTOGRAPHY_ENGINE_PROTOTYPE.md
+│       ├── SEPOLIA_DEPLOYMENT.md
+│       ├── SEPOLIA_PREPARATION.md
+│       ├── STAGE10_VALIDATION.md
+│       ├── STAGE8_DEMONSTRATION.md
+│       └── STAGE9_VALIDATION.md
 ├── hardhat.config.js
 ├── compose.yaml
 ├── .dockerignore
@@ -859,9 +863,9 @@ blockchain/
 └── README.md
 ```
 
-The Sepolia preparation, validation, and deployment reports are present.
-Generated artifacts, caches, coverage output, dependencies, `.env` files, and
-keystore material are not tracked.
+Historical preparation, validation, and deployment reports are preserved in
+`docs/archive/`. Generated artifacts, caches, coverage output, dependencies,
+`.env` files, and keystore material are not tracked.
 
 ## 17. Roadmap and Approval Gates
 
@@ -941,7 +945,7 @@ The implemented application integration uses:
 
 The blockchain backend-handoff document defines the current interface.
 Implementation details and local startup are documented in
-`docs/FRONTEND_APPLICATION.md`. Production operation remains a
+`docs/APPLICATION_GUIDE.md`. Production operation remains a
 separately reviewed responsibility.
 
 ## 20. Remaining Deferred Decisions

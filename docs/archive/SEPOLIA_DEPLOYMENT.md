@@ -1,4 +1,4 @@
-# Sepolia Deployment Report
+# Sepolia Deployment — Historical Record
 
 > Historical Stage 11 evidence for the currently configured Sepolia
 > deployment. This report records what was executed on 2026-07-21 and does not

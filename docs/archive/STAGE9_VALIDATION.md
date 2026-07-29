@@ -1,10 +1,10 @@
-# Stage 9 Clean-Installation Validation
+# Stage 9 Clean-Installation Validation — Historical Record
 
 Date: 2026-07-21
 
 > Historical clean-install evidence. Package counts and test counts below are
 > the values recorded at Stage 9, not the current full repository totals. See
-> [`README.md`](README.md) for the documentation index.
+> [`README.md`](../README.md) for the current documentation index.
 
 Stage 9 was validated from a temporary copy that excluded `.git`,
 `node_modules/`, `artifacts/`, `cache/`, `coverage/`, and generated type

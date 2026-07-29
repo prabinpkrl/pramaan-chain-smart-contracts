@@ -1,4 +1,4 @@
-# PramaanChain Prototype Application
+# PramaanChain Application Guide (Archived)
 
 This document covers the wallet-connected frontend and the private application
 backend. The smart contract and existing `backend/` blockchain gateway remain
@@ -60,7 +60,7 @@ npm start
 ```
 
 The gateway may run read-only. Configure its Sepolia RPC and public contract
-values as described in `BACKEND_API.md`.
+values as described in `BACKEND_ARCHITECTURE_AND_API.md`.
 
 ### Private application backend
 

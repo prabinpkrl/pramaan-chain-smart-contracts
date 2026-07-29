@@ -1,10 +1,10 @@
-# Stage 8 Local Demonstration
+# Stage 8 Local Demonstration — Historical Record
 
 Date: 2026-07-21
 
 > Historical local evidence. Values and outputs below are preserved as
 > recorded and are not current persistent-chain configuration. See
-> [`README.md`](README.md) for the documentation index.
+> [`README.md`](../README.md) for the current documentation index.
 
 This record documents a local-only PramaanChain deployment and lifecycle
 demonstration. The node used Hardhat's temporary development chain and funded

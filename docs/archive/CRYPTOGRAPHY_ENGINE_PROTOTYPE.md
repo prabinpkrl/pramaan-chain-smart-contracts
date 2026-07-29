@@ -1,9 +1,10 @@
-# PramaanChain Cryptography Engine (Prototype)
+# PramaanChain Cryptography Engine — Historical Prototype
 
 > Historical compact overview. The current implementation distributes these
 > responsibilities across the browser frontend, private application backend,
 > public blockchain gateway, and contract. See
-> [`CRYPTOGRAPHY_ENGINE.md`](CRYPTOGRAPHY_ENGINE.md) for the current boundary.
+> [`CRYPTOGRAPHY_ENGINE.md`](CRYPTOGRAPHY_ENGINE.md) for the detailed
+> boundary.
 
 ## 1. Overview
 This document describes the prototype Cryptography Engine used by PramaanChain on the Ethereum Sepolia network. It performs SHA-256 hashing, document validation, issuance, verification, and blockchain interaction through ethers v6.

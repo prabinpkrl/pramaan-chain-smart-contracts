@@ -1,4 +1,4 @@
-# PramaanChain Frontend Integration
+# PramaanChain Frontend Integration (Archived)
 
 ## 1. Current status
 
@@ -198,6 +198,7 @@ authorization boundary for private data and mutations.
   delivery remain outside the current prototype.
 
 For setup and the complete private API list, see
-[`FRONTEND_APPLICATION.md`](FRONTEND_APPLICATION.md). For public gateway
-requests and responses, see [`BACKEND_API.md`](BACKEND_API.md) and
+[`APPLICATION_GUIDE.md`](APPLICATION_GUIDE.md). For public gateway
+requests and responses, see
+[`BACKEND_ARCHITECTURE_AND_API.md`](BACKEND_ARCHITECTURE_AND_API.md) and
 [`BACKEND_SAMPLES.md`](BACKEND_SAMPLES.md).

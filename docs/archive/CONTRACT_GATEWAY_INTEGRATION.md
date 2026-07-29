@@ -1,8 +1,10 @@
-# PramaanChain Backend Handoff
+# PramaanChain Contract and Gateway Integration (Archived)
 
 > Current status: the handoff has been implemented in the `backend/` gateway.
-> Use [`BACKEND_API.md`](BACKEND_API.md) for its current routes and
-> [`FRONTEND_APPLICATION.md`](FRONTEND_APPLICATION.md) for the separate SIWE
+> Use
+> [`BACKEND_ARCHITECTURE_AND_API.md`](BACKEND_ARCHITECTURE_AND_API.md) for
+> its architecture and current routes, and
+> [`APPLICATION_GUIDE.md`](APPLICATION_GUIDE.md) for the separate SIWE
 > and private relationship service. This document remains the contract
 > integration reference.
 

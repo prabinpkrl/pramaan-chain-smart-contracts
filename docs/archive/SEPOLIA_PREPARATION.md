@@ -1,4 +1,4 @@
-# Sepolia Preparation
+# Sepolia Preparation — Historical Record
 
 > Historical Stage 10 preparation record. Stage 11 subsequently completed on
 > 2026-07-21. See [`SEPOLIA_DEPLOYMENT.md`](SEPOLIA_DEPLOYMENT.md) for the

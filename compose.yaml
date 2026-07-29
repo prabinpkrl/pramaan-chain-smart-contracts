@@ -21,7 +21,7 @@ x-contract-tool: &contract-tool
     provenance: mode=max
   profiles: ["deploy"]
   environment:
-    SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:?Set SEPOLIA_RPC_URL in .env.docker}
+    SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:?Set SEPOLIA_RPC_URL in .env}
     SOURCE_COMMIT: ${SOURCE_COMMIT:-REPLACE_WITH_FULL_40_CHARACTER_GIT_COMMIT_SHA}
     DEPLOYMENT_RUNTIME_PATH: /workspace/.docker-state/runtime.env
     DEPLOYMENT_EVIDENCE_PATH: /workspace/.docker-state/deployment.json
@@ -48,7 +48,7 @@ services:
       dockerfile: docker/gateway.Dockerfile
       provenance: mode=max
     environment:
-      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:?Set SEPOLIA_RPC_URL in .env.docker}
+      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:?Set SEPOLIA_RPC_URL in .env}
       DEPLOYMENT_RUNTIME_PATH: /run/pramaan/runtime.env
       CORS_ALLOWED_ORIGINS: ${PUBLIC_APP_URL:-http://localhost:5173}
       BLOCKCHAIN_NETWORK: sepolia
@@ -80,7 +80,7 @@ services:
       dockerfile: docker/app-backend.Dockerfile
       provenance: mode=max
     environment:
-      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:?Set SEPOLIA_RPC_URL in .env.docker}
+      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:?Set SEPOLIA_RPC_URL in .env}
       DEPLOYMENT_RUNTIME_PATH: /run/pramaan/runtime.env
       APP_ORIGIN: ${PUBLIC_APP_URL:-http://localhost:5173}
       SIWE_DOMAIN: ${SIWE_DOMAIN:-localhost:5173}
@@ -170,7 +170,7 @@ services:
   configure-existing:
     <<: *contract-tool
     environment:
-      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:?Set SEPOLIA_RPC_URL in .env.docker}
+      SEPOLIA_RPC_URL: ${SEPOLIA_RPC_URL:?Set SEPOLIA_RPC_URL in .env}
       SOURCE_COMMIT: ${SOURCE_COMMIT:-REPLACE_WITH_FULL_40_CHARACTER_GIT_COMMIT_SHA}
       DEPLOYMENT_RUNTIME_PATH: /workspace/.docker-state/runtime.env
       DEPLOYMENT_EVIDENCE_PATH: /workspace/.docker-state/deployment.json
