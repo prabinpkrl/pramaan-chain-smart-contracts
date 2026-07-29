@@ -7,6 +7,7 @@ import {
   normalizeSourceCommit,
   normalizeDeploymentMetadata,
   parseRuntimeEnv,
+  readRuntimeEnvIfPresent,
   sanitizedError,
   serializeRuntimeEnv,
   validatedSourceCommit,
@@ -64,6 +65,13 @@ describe("Docker deployment runtime metadata", () => {
     assert.doesNotThrow(
       () => assertRuntimeWritable(runtime, { overwrite: true }),
     );
+  });
+
+  it("exports null runtime metadata when deployment has not reached READY", () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "pramaan-runtime-"));
+    const runtime = path.join(directory, "missing-runtime.env");
+
+    assert.equal(readRuntimeEnvIfPresent(runtime), null);
   });
 
   it("requires a full source commit and matches the image revision", () => {

@@ -81,6 +81,12 @@ cd pramaan-chain-smart-contracts
 cp .env.docker.example .env
 ```
 
+On Windows PowerShell, use this copy command instead:
+
+```powershell
+Copy-Item .env.docker.example .env
+```
+
 Docker Compose loads `.env` automatically. Set:
 
 ```dotenv
@@ -119,12 +125,25 @@ Use only a dedicated, test-only administrator wallet. The keystore command
 prompts for the private key; the key is not part of the command or shell
 history.
 
+Linux or macOS (Bash):
+
 ```bash
 docker compose --profile deploy build contract-tools
 docker compose --profile deploy run --rm contract-tools \
   npx hardhat keystore set DEPLOYER_PRIVATE_KEY
 docker compose --profile deploy run --rm deploy-contract
 ```
+
+Windows (PowerShell or Command Prompt):
+
+```powershell
+docker compose --profile deploy build contract-tools
+docker compose --profile deploy run --rm contract-tools npx hardhat keystore set DEPLOYER_PRIVATE_KEY
+docker compose --profile deploy run --rm deploy-contract
+```
+
+Windows users must run the keystore command on one line. The Bash backslash
+line continuation must not be passed to Docker as an argument.
 
 This path sends exactly one Sepolia deployment transaction. See the
 [Docker demo](docs/DOCKER_DEMO.md) for test-ETH faucets, optional Etherscan

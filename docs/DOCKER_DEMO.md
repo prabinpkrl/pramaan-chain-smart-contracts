@@ -14,6 +14,12 @@ cd pramaan-chain-smart-contracts
 cp .env.docker.example .env
 ```
 
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.docker.example .env
+```
+
 Set these values in `.env`:
 
 ```dotenv
@@ -79,12 +85,12 @@ administrator wallet with enough Sepolia ETH.
 
 Required preparation:
 
+Run:
+
 ```bash
 docker compose --profile deploy build contract-tools
-docker compose --profile deploy run --rm contract-tools \
-  npx hardhat keystore set DEPLOYER_PRIVATE_KEY
+docker compose --profile deploy run --rm contract-tools npx hardhat keystore set DEPLOYER_PRIVATE_KEY
 ```
-
 The keystore command prompts for the private key and keystore password. The
 encrypted key stays in the `hardhat_keystore` Docker volume and is not given to
 the frontend, gateway, or application backend.
@@ -94,6 +100,12 @@ Optional — enable automatic Etherscan source verification before deployment:
 ```bash
 docker compose --profile deploy run --rm contract-tools \
   npx hardhat keystore set ETHERSCAN_API_KEY
+```
+
+Windows:
+
+```powershell
+docker compose --profile deploy run --rm contract-tools npx hardhat keystore set ETHERSCAN_API_KEY
 ```
 
 Required deployment:
@@ -110,7 +122,16 @@ docker compose --profile deploy run --rm contract-tools \
 docker compose --profile deploy run --rm resume-deployment
 ```
 
+Windows:
+
+```powershell
+docker compose --profile deploy run --rm contract-tools npm run docker:export-deployment
+docker compose --profile deploy run --rm resume-deployment
+```
+
 Do not rerun `deploy-contract` after an interrupted submission.
+The export output uses `"runtime": null` until recovery creates the runtime
+configuration; the saved `evidence` remains available for diagnosis.
 
 ## 3. Start the application
 

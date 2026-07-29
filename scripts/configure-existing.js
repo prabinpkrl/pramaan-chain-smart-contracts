@@ -38,7 +38,11 @@ try {
     administrator: required("IMPORT_ADMINISTRATOR_ADDRESS"),
   });
 
-  const provider = new JsonRpcProvider(required("SEPOLIA_RPC_URL"));
+  const provider = new JsonRpcProvider(
+    required("SEPOLIA_RPC_URL"),
+    undefined,
+    { batchMaxCount: 1 },
+  );
   const network = await provider.getNetwork();
   if (network.chainId.toString() !== metadata.chainId) {
     throw new Error(

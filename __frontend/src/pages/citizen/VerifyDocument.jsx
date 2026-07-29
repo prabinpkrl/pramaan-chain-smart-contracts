@@ -111,7 +111,7 @@ function VerifyDocument() {
 
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
-      <PublicHeader />
+      <PublicHeader showSignIn={false} />
       <main className="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-12 lg:py-16">
         <div className="mb-8 grid gap-5 sm:mb-10 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>

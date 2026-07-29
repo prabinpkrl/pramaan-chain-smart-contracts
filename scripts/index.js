@@ -27,7 +27,9 @@ export async function initialize() {
     process.env.BLOCKCHAIN_CHAIN_ID || "11155111",
   );
   const artifact = JSON.parse(fs.readFileSync(abiPath, "utf8"));
-  const provider = new JsonRpcProvider(rpcUrl);
+  const provider = new JsonRpcProvider(rpcUrl, undefined, {
+    batchMaxCount: 1,
+  });
 
   const network = await provider.getNetwork();
   if (network.chainId !== expectedChainId) {

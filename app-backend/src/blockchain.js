@@ -55,7 +55,10 @@ function normalizeRecord(documentHash, record) {
 
 export class BlockchainService {
   constructor({ rpcUrl, chainId, contractAddress }) {
-    this.provider = new JsonRpcProvider(rpcUrl, chainId, { staticNetwork: true });
+    this.provider = new JsonRpcProvider(rpcUrl, chainId, {
+      staticNetwork: true,
+      batchMaxCount: 1,
+    });
     this.chainId = BigInt(chainId);
     this.contractAddress = getAddress(contractAddress);
     this.contract = new Contract(this.contractAddress, ABI, this.provider);

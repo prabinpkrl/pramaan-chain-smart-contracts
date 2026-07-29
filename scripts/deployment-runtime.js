@@ -130,6 +130,15 @@ export function readRuntimeEnv(filePath = DEFAULT_RUNTIME_PATH) {
   return parseRuntimeEnv(fs.readFileSync(path.resolve(filePath), "utf8"));
 }
 
+export function readRuntimeEnvIfPresent(filePath = DEFAULT_RUNTIME_PATH) {
+  try {
+    return readRuntimeEnv(filePath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
 export function writeEvidence(filePath, value) {
   atomicWrite(
     filePath,

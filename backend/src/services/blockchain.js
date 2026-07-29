@@ -45,7 +45,9 @@ export async function initBlockchain() {
 
   const rpcRequest = new FetchRequest(config.rpcUrl);
   rpcRequest.timeout = config.rpcRequestTimeoutMs;
-  provider = new JsonRpcProvider(rpcRequest);
+  provider = new JsonRpcProvider(rpcRequest, undefined, {
+    batchMaxCount: 1,
+  });
 
   const network = await provider.getNetwork();
   if (network.chainId !== config.chainId) {

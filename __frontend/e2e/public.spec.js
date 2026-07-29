@@ -54,6 +54,7 @@ test("landing proof chamber accepts an existing SHA-256 hash", async ({ page }) 
 test("public verifier accepts a hash and presents an active result", async ({ page }, testInfo) => {
   await page.goto("/verify");
   await expect(page.getByRole("heading", { name: "Verify an exact certificate proof." })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in" })).toHaveCount(0);
   await page.screenshot({
     path: testInfo.outputPath("verify-empty.png"),
     fullPage: true,

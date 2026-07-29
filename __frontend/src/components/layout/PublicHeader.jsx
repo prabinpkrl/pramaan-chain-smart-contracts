@@ -3,7 +3,7 @@ import { ExternalLink } from "lucide-react";
 import Brand from "../brand/Brand";
 import { config } from "../../config";
 
-function PublicHeader() {
+function PublicHeader({ showSignIn = true }) {
   return (
     <header className="relative z-30 border-b border-[var(--border)] bg-[var(--canvas)]/95">
       <div className="mx-auto flex h-18 max-w-7xl items-center justify-between gap-4 px-5 sm:px-8">
@@ -25,12 +25,14 @@ function PublicHeader() {
           >
             Verify
           </Link>
-          <Link
-            to="/login"
-            className="inline-flex min-h-10 items-center rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[#090a0d] transition hover:bg-[var(--accent-strong)]"
-          >
-            Sign in
-          </Link>
+          {showSignIn && (
+            <Link
+              to="/login"
+              className="inline-flex min-h-10 items-center rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[#090a0d] transition hover:bg-[var(--accent-strong)]"
+            >
+              Sign in
+            </Link>
+          )}
         </nav>
       </div>
     </header>
