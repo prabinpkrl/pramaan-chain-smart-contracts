@@ -73,3 +73,13 @@ test("portal shell fits a compact 320px phone viewport", async ({ page }, testIn
     animations: "disabled",
   });
 });
+
+test("new deployment guides the administrator to onboard the first issuer", async ({ page }) => {
+  await mockApis(page, { role: "ADMIN", institutions: [] });
+  await page.goto("/admin/issuers");
+  await expect(page.getByText("No institutions are registered yet.")).toBeVisible();
+  await expect(page.getByText(
+    "Your administrator wallet will authorize that issuer on-chain",
+    { exact: false },
+  )).toBeVisible();
+});

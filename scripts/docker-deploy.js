@@ -21,7 +21,7 @@ function run(command, args, { capture = false } = {}) {
 for (const [command, args] of [
   ["npm", ["run", "compile", "--", "--build-profile", "production"]],
   ["npm", ["test"]],
-  ["npm", ["run", "sepolia:deploy-authorize"]],
+  ["npm", ["run", "sepolia:deploy"]],
 ]) {
   const result = run(command, args);
   if (result.status !== 0) process.exit(result.status ?? 1);

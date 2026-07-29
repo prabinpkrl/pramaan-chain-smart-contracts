@@ -57,8 +57,10 @@ export function normalizeDeploymentMetadata(value) {
   }
 
   const administrator = address(value?.administrator, "administrator");
-  const issuer = address(value?.issuer, "issuer");
-  if (administrator.toLowerCase() === issuer.toLowerCase()) {
+  const issuer = value?.issuer === undefined || String(value.issuer).trim() === ""
+    ? undefined
+    : address(value.issuer, "issuer");
+  if (issuer && administrator.toLowerCase() === issuer.toLowerCase()) {
     throw new Error("administrator and issuer must be different addresses");
   }
 
@@ -67,20 +69,20 @@ export function normalizeDeploymentMetadata(value) {
     contractAddress: address(value?.contractAddress, "contractAddress"),
     deploymentBlockNumber: blockNumber(value?.deploymentBlockNumber),
     administrator,
-    issuer,
+    ...(issuer ? { issuer } : {}),
   };
 }
 
 export function serializeRuntimeEnv(value) {
   const metadata = normalizeDeploymentMetadata(value);
-  return [
+  const lines = [
     `BLOCKCHAIN_CHAIN_ID=${metadata.chainId}`,
     `PRAMAAN_CHAIN_ADDRESS=${metadata.contractAddress}`,
     `PRAMAAN_CHAIN_START_BLOCK=${metadata.deploymentBlockNumber}`,
     `ADMINISTRATOR_ADDRESS=${metadata.administrator}`,
-    `ISSUER_ADDRESS=${metadata.issuer}`,
-    "",
-  ].join("\n");
+  ];
+  if (metadata.issuer) lines.push(`ISSUER_ADDRESS=${metadata.issuer}`);
+  return [...lines, ""].join("\n");
 }
 
 export function parseRuntimeEnv(contents) {

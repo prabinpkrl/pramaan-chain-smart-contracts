@@ -27,8 +27,6 @@ x-contract-tool: &contract-tool
     DEPLOYMENT_EVIDENCE_PATH: /workspace/.docker-state/deployment.json
     ALLOW_NEW_DEPLOYMENT: ${ALLOW_NEW_DEPLOYMENT:-false}
     ALLOW_RUNTIME_OVERWRITE: ${ALLOW_RUNTIME_OVERWRITE:-false}
-    ALLOW_AUTHORIZATION_RESUBMIT: ${ALLOW_AUTHORIZATION_RESUBMIT:-false}
-    AUTHORIZATION_RETRY_CONFIRMATION: ${AUTHORIZATION_RETRY_CONFIRMATION:-}
   volumes:
     - hardhat_keystore:/home/node/.config/hardhat-nodejs
     - deployment_state:/workspace/.docker-state
@@ -57,8 +55,6 @@ services:
       BLOCKCHAIN_CONFIRMATIONS: "2"
       TRUST_PROXY: "false"
       IDEMPOTENCY_STORE_PATH: /app/.data/idempotency.json
-      ISSUER_ADDRESS: ""
-      ISSUER_PRIVATE_KEY: ""
       WRITE_API_KEY: ""
       PORT: "3000"
     ports:
@@ -167,9 +163,9 @@ services:
     <<: *contract-tool
     command: ["npm", "run", "docker:deploy"]
 
-  resume-authorization:
+  resume-deployment:
     <<: *contract-tool
-    command: ["npm", "run", "sepolia:resume-authorize"]
+    command: ["npm", "run", "sepolia:resume-deployment"]
 
   configure-existing:
     <<: *contract-tool
@@ -183,7 +179,6 @@ services:
       IMPORT_CONTRACT_ADDRESS: ${IMPORT_CONTRACT_ADDRESS:-}
       IMPORT_DEPLOYMENT_BLOCK: ${IMPORT_DEPLOYMENT_BLOCK:-}
       IMPORT_ADMINISTRATOR_ADDRESS: ${IMPORT_ADMINISTRATOR_ADDRESS:-}
-      IMPORT_ISSUER_ADDRESS: ${IMPORT_ISSUER_ADDRESS:-}
     command: ["npm", "run", "docker:configure-existing"]
 
 volumes:

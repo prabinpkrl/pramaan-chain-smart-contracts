@@ -173,12 +173,12 @@ No signer or transaction is required for verification.
 
 ### Sepolia wallet model
 
-Every Sepolia deployment uses two different test-only wallets:
-
-1. A dedicated administrator/deployer wallet. Its address receives
-   `ADMIN_ROLE` for that new contract.
-2. A separate dedicated issuer wallet authorized during the synthetic
-   lifecycle.
+Every Sepolia deployment starts with a dedicated test-only
+administrator/deployer wallet. Its address receives `ADMIN_ROLE` for that new
+contract. Normal Docker deployment requires no issuer address or issuer key.
+After application startup, the administrator authorizes a separate test-only
+issuer through the browser-wallet onboarding flow. The optional legacy
+synthetic lifecycle prepares both wallets before running its four transactions.
 
 The original reference wallets remain controlled by the original blockchain
 lead. An independent operator creates and controls a new pair and therefore
@@ -355,17 +355,16 @@ environment variables or the encrypted `hardhat-keystore` plugin. The encrypted
 keystore is the required default for local operator use:
 <https://hardhat.org/docs/guides/configuration-variables>.
 
-The manual npm deployment commands resolve these Hardhat configuration
-variables:
+The normal manual deployment command resolves:
 
 ```dotenv
 SEPOLIA_RPC_URL=placeholder
 DEPLOYER_PRIVATE_KEY=placeholder
-ISSUER_PRIVATE_KEY=placeholder
 ```
 
-`ETHERSCAN_API_KEY` is conditionally required for source verification, not for
-compilation, tests, or deployment.
+`ISSUER_PRIVATE_KEY` is required only by the optional four-transaction
+`sepolia:deploy-demo` lifecycle. `ETHERSCAN_API_KEY` is conditionally required
+for source verification, not for compilation, tests, or deployment.
 
 The committed `.env.example` files label each variable as `REQUIRED`,
 `OPTIONAL`, or `CONDITIONALLY REQUIRED` and contain placeholders only. `.env`
@@ -374,28 +373,28 @@ optional plaintext fallback without overriding already exported values.
 CI/CD must obtain secrets from repository secrets or another approved secret
 manager. No workflow may echo their values.
 
-The Sepolia Hardhat network must use:
+The Hardhat Sepolia profiles are separated by capability:
 
 ```text
-type: http
-chainType: l1
-chainId: 11155111
-account 0: DEPLOYER_PRIVATE_KEY
-account 1: ISSUER_PRIVATE_KEY
+sepolia: read-only RPC and source verification
+sepolia-admin: account 0 is DEPLOYER_PRIVATE_KEY
+sepolia-demo: account 0 is DEPLOYER_PRIVATE_KEY,
+              account 1 is ISSUER_PRIVATE_KEY
 ```
 
-The Etherscan verifier uses `ETHERSCAN_API_KEY`. Deployment and verification
-must use the same production build profile and compiler settings. Hardhat's
-verification workflow is documented at
+All three profiles are HTTP, L1, and chain ID `11155111`. The Etherscan
+verifier uses `ETHERSCAN_API_KEY`. Deployment and verification must use the
+same production build profile and compiler settings. Hardhat's verification
+workflow is documented at
 <https://hardhat.org/docs/guides/smart-contract-verification>.
 
-The recommended Docker workflow stores `DEPLOYER_PRIVATE_KEY`,
-`ISSUER_PRIVATE_KEY`, and the optional `ETHERSCAN_API_KEY` only in the named
-encrypted `hardhat_keystore` volume. `.env.docker` supplies the RPC and public
-application settings but must never contain wallet keys. Only the one-shot
-services behind Compose's `deploy` profile mount the keystore. The long-running
-gateway, private backend, and frontend do not mount it and do not receive
-wallet keys through their environments.
+The recommended Docker workflow stores `DEPLOYER_PRIVATE_KEY` and the optional
+`ETHERSCAN_API_KEY` only in the named encrypted `hardhat_keystore` volume.
+`.env.docker` supplies the RPC and public application settings but must never
+contain wallet keys. Only the one-shot services behind Compose's `deploy`
+profile mount the keystore. The long-running gateway, private backend, and
+frontend do not mount it and do not receive wallet keys through their
+environments.
 
 An independent deployment produces public configuration rather than secrets:
 
@@ -404,7 +403,7 @@ An independent deployment produces public configuration rather than secrets:
 | Chain ID | Gateway, application backend, and frontend |
 | Contract address | Gateway, application backend, and frontend |
 | Deployment block | Gateway event index |
-| Administrator and issuer addresses | Wallet identity checks and institution onboarding |
+| Administrator address | Administrator login and post-start issuer onboarding |
 | Transaction hashes | Receipt validation and public evidence |
 
 Every component must use the same new contract address. The gateway must start
@@ -419,8 +418,9 @@ evidence; application entrypoints load only allowlisted runtime values. The
 volume is mounted read-only by the gateway, private backend, and frontend. An
 existing deployment may populate it only after read-only
 validation of chain ID, exact compiled runtime bytecode, the successful
-contract-creation receipt in the supplied deployment block, current
-administrator role, and issuer authorization.
+contract-creation receipt in the supplied deployment block, and current
+administrator role. Older runtime files may contain an optional issuer address,
+but new deployment and import flows do not require or generate one.
 
 ## 14. Main Contract Flows
 
@@ -716,15 +716,15 @@ application startup:
 flowchart TD
     CLONE["Clone, select a pushed full commit SHA, and create ignored .env.docker"] --> CHOOSE{"Contract already deployed?"}
     CHOOSE -->|"Yes"| IMPORT["Read-only import and exact deployment validation"]
-    CHOOSE -->|"No"| KEYS["Create two test wallets and store keys in encrypted Docker volume"]
+    CHOOSE -->|"No"| KEYS["Store the test administrator key in the encrypted Docker volume"]
     KEYS --> TEST1["Compile production profile and run contract tests"]
     TEST1 --> DEPLOY["Transaction 1: deploy contract"]
-    DEPLOY --> AUTH["Transaction 2: authorize issuer"]
-    AUTH --> VERIFY["Verify source when Etherscan key is configured"]
+    DEPLOY --> VERIFY["Verify source when Etherscan key is configured"]
     IMPORT --> RUNTIME["Write public runtime and evidence to named volume"]
     VERIFY --> RUNTIME
     RUNTIME --> RUN["Build and start default Compose application services"]
-    RUN --> UX["Browser and application checks"]
+    RUN --> AUTH["Administrator authorizes and registers the first issuer"]
+    AUTH --> UX["Browser and application checks"]
 ```
 
 The contract-tools image is built from the exact full `SOURCE_COMMIT` fetched
@@ -732,16 +732,15 @@ from the project Git repository, labeled with that revision, and built with
 BuildKit provenance. Its runtime rejects a source revision that differs from
 the embedded build revision. The `deploy-contract` one-shot service then
 compiles the production profile and runs all contract tests before any write.
-It deploys one new contract and authorizes the separate issuer, sending exactly
-two transactions. Issuance and revocation are excluded from infrastructure
-setup and remain explicit browser-wallet actions. The deployment output
-contains the source commit, deployed-bytecode hash, new contract address,
-deployment block, administrator, issuer, both transaction hashes, and
-source-verification status.
+It deploys one new contract, sending exactly one transaction. Issuer
+authorization, issuance, and revocation are excluded from infrastructure setup
+and remain explicit browser-wallet actions. The deployment output contains the
+source commit, deployed-bytecode hash, new contract address, deployment block,
+administrator, deployment transaction hash, and source-verification status.
 
 The `configure-existing` service is an alternative, read-only path. It
-requires the exact contract address, deployment block, administrator, and
-issuer and writes runtime metadata only after validating them on Sepolia.
+requires the exact contract address, deployment block, and administrator and
+writes runtime metadata only after validating them on Sepolia.
 
 Once runtime metadata exists in `deployment_state`, a normal
 `docker compose up --build -d` starts the gateway, private backend, and
@@ -752,21 +751,18 @@ capabilities, and `no-new-privileges`; their writable state is limited to
 named volumes and temporary filesystems. Non-loopback use requires a separate
 HTTPS ingress review and secure cookies.
 
-Authorization recovery is transaction-aware. It resolves the recorded
-authorization hash and receipt, current issuer role, and administrator nonce
-before acting. Active and pending transactions are never resubmitted.
-Ambiguous or inconsistent state is blocked. A retry is possible only after a
-failed receipt or proof that the recorded nonce is already consumed, and then
-requires an explicit opt-in plus confirmation equal to the exact recorded
-transaction hash. Recovery also revalidates exact runtime bytecode, the
-successful deployment receipt and block, and the administrator role before
-any possible write.
+Deployment recovery is read-only and transaction-aware. It resolves the
+recorded deployment hash, receipt, transaction and administrator nonce.
+Successful contract creation is finalized only after revalidating exact
+runtime bytecode, the deployment receipt and block, and the administrator
+role. Pending, failed, ambiguous or inconsistent evidence is blocked and never
+causes an automatic replacement deployment.
 
 After deployment, configuration ownership is:
 
 | Component | Required independent values | Prohibited values |
 | --- | --- | --- |
-| Docker/Hardhat one-shot operator | RPC, encrypted administrator key, encrypted issuer key; Etherscan key for verification | Personal or mainnet wallet credentials |
+| Docker/Hardhat one-shot operator | RPC, encrypted administrator key; Etherscan key for verification | Issuer key, personal or mainnet wallet credentials |
 | Public gateway | RPC, generated contract address, generated deployment block, browser CORS origin | Administrator key, issuer key, deployment keystore |
 | Private application backend | RPC, generated contract address, persistent database encryption key | Administrator key, issuer key, deployment keystore, frontend secrets |
 | Frontend | New contract address and public service URLs; WalletConnect project ID only when mobile QR is enabled | RPC credentials, wallet keys, database key, write API key |
@@ -775,8 +771,8 @@ The private backend generates its application-data encryption key on first
 container start and stores it with the SQLite database in the persistent
 `app_data` volume. The gateway's persistent event/idempotency state uses a
 separate volume. Public deployment identity uses `deployment_state`; the
-administrator, issuer, and optional Etherscan secrets use the separate
-encrypted `hardhat_keystore` volume. A tightly scoped one-shot initializer
+administrator and optional Etherscan secrets use the separate encrypted
+`hardhat_keystore` volume. A tightly scoped one-shot initializer
 sets ownership on the two deployment volumes, so the workflow is independent
 of the host user's UID. Removing Compose volumes destroys those local values
 but does not alter Sepolia.
@@ -819,21 +815,22 @@ blockchain/
 │   ├── nginx-main.conf
 │   └── nginx.conf
 ├── test/
-│   ├── AuthorizationRecovery.test.js
+│   ├── DeploymentProfiles.test.js
+│   ├── DeploymentRecovery.test.js
 │   ├── DeploymentRuntime.test.js
 │   ├── NetworkSafety.test.js
 │   └── PramaanChain.test.js
 ├── scripts/
-│   ├── authorization-recovery.js
 │   ├── configure-existing.js
 │   ├── deploy.js
-│   ├── deploy-and-authorize.js
+│   ├── deploy-contract.js
+│   ├── deployment-recovery.js
 │   ├── deployment-runtime.js
 │   ├── deployment-validation.js
 │   ├── demo.js
 │   ├── docker-deploy.js
 │   ├── export-deployment.js
-│   ├── resume-authorization.js
+│   ├── resume-deployment.js
 │   └── network-safety.js
 ├── docs/
 │   ├── README.md

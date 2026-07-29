@@ -183,6 +183,13 @@ export async function mockApis(page, {
   verifyStatus = "ACTIVE",
   initialSession = role ? sessionFor(role) : null,
   signInRole = "ADMIN",
+  institutions = [{
+    id: "institution-1",
+    name: "Tribhuvan University",
+    publicId: "TU-NEPAL",
+    issuerAddress: ADDRESSES.issuer,
+    authorized: true,
+  }],
 } = {}) {
   await page.route("http://localhost:4000/api/**", async (route) => {
     const request = route.request();
@@ -201,15 +208,7 @@ export async function mockApis(page, {
     if (pathname === "/api/auth/logout") return route.fulfill({ json: { ok: true } });
     if (pathname === "/api/admin/institutions") {
       return route.fulfill({
-        json: {
-          institutions: [{
-            id: "institution-1",
-            name: "Tribhuvan University",
-            publicId: "TU-NEPAL",
-            issuerAddress: ADDRESSES.issuer,
-            authorized: true,
-          }],
-        },
+        json: { institutions },
       });
     }
     if (pathname === "/api/issuer/requests") {

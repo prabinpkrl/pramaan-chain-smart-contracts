@@ -5,6 +5,8 @@ describe("deployment network safety", function () {
   it("accepts the documented local and Sepolia chain IDs", function () {
     expect(() => assertExpectedChainId("localhost", 31337n)).not.to.throw();
     expect(() => assertExpectedChainId("sepolia", 11155111n)).not.to.throw();
+    expect(() => assertExpectedChainId("sepolia-admin", 11155111n)).not.to.throw();
+    expect(() => assertExpectedChainId("sepolia-demo", 11155111n)).not.to.throw();
   });
 
   it("rejects a mismatched chain ID before deployment", function () {

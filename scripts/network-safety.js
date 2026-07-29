@@ -1,6 +1,8 @@
 const EXPECTED_CHAIN_IDS = Object.freeze({
   localhost: 31337n,
   sepolia: 11155111n,
+  "sepolia-admin": 11155111n,
+  "sepolia-demo": 11155111n,
 });
 
 export function assertExpectedChainId(networkName, actualChainId) {

@@ -4,7 +4,7 @@ This guide starts from a fresh clone and runs the complete PramaanChain
 prototype with Docker Compose. It supports two safe paths:
 
 - deploy a new Sepolia contract controlled by your own test-only
-  administrator and issuer wallets; or
+  administrator wallet; or
 - import and validate an existing Sepolia deployment without sending a
   transaction.
 
@@ -42,8 +42,7 @@ Etherscan API key.
 For a new deployment, also prepare:
 
 - a new test-only administrator/deployer wallet;
-- a different new test-only issuer wallet;
-- enough Sepolia ETH for deployment and authorization; and
+- enough Sepolia ETH for the deployment transaction; and
 - optionally, an Etherscan API key.
 
 Never use a personal or mainnet wallet. Never paste a seed phrase into this
@@ -112,14 +111,13 @@ Choose exactly one of the next two paths.
 
 ## 4A. Use an existing contract without a transaction
 
-Use this path when the contract is already deployed and its issuer is already
-authorized. Add its public identity to `.env.docker`:
+Use this path when the contract is already deployed. No issuer needs to be
+authorized yet. Add its public identity to `.env.docker`:
 
 ```dotenv
 IMPORT_CONTRACT_ADDRESS=0xYourContractAddress
 IMPORT_DEPLOYMENT_BLOCK=12345678
 IMPORT_ADMINISTRATOR_ADDRESS=0xAdministratorAddress
-IMPORT_ISSUER_ADDRESS=0xAuthorizedIssuerAddress
 ```
 
 Run:
@@ -134,8 +132,7 @@ This command performs only read calls. It checks:
 2. live runtime bytecode exactly matches this repository's compiled contract;
 3. the contract's successful creation receipt exists in the exact supplied
    deployment block;
-4. the supplied administrator holds `ADMIN_ROLE`; and
-5. the supplied issuer is currently authorized.
+4. the supplied administrator holds `ADMIN_ROLE`.
 
 Do not guess the deployment block when importing a contract.
 
@@ -151,17 +148,13 @@ docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
 
 Continue at [Start the application](#6-start-the-application).
 
-## 4B. Deploy and authorize a new contract
+## 4B. Deploy a new contract
 
 ### Transaction scope
 
-This path sends exactly two Sepolia transactions:
-
-1. deploy `PramaanChain` from the administrator wallet; and
-2. authorize the separate issuer wallet from the administrator wallet.
-
-It does not issue or revoke a proof. Those actions remain deliberate
-application demonstrations signed by the selected browser wallet.
+This path sends exactly one Sepolia transaction: deploy `PramaanChain` from
+the administrator wallet. Issuer authorization happens later through the
+administrator dashboard. Deployment does not issue or revoke a proof.
 
 ### Store deployment secrets
 
@@ -171,19 +164,16 @@ Build the deployment tool image:
 docker compose --env-file .env.docker --profile deploy build contract-tools
 ```
 
-Store the two wallet private keys in Hardhat's encrypted keystore. Each command
-prompts for the value and the keystore password:
+Store the administrator private key in Hardhat's encrypted keystore. The
+command prompts for the value and the keystore password:
 
 ```bash
 docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
   npx hardhat keystore set DEPLOYER_PRIVATE_KEY
-
-docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
-  npx hardhat keystore set ISSUER_PRIVATE_KEY
 ```
 
-The first signer becomes the administrator. The second signer is authorized
-as the issuer. They must be different addresses.
+The signer becomes the administrator of the new contract. No issuer address or
+issuer private key is required during deployment.
 
 For automatic Etherscan source verification, also run:
 
@@ -200,9 +190,8 @@ either long-running backend.
 
 Before continuing, confirm:
 
-- both wallets are new, dedicated Sepolia test wallets;
+- the administrator wallet is a new, dedicated Sepolia test wallet;
 - the deployer has enough Sepolia ETH;
-- the issuer may have zero ETH until it signs an application write;
 - the RPC is Sepolia, not mainnet or another chain;
 - the named `deployment_state` volume does not already identify a deployment;
   use `npm run docker:export-deployment` to check; and
@@ -218,67 +207,45 @@ The command:
 
 1. compiles the production Hardhat profile;
 2. runs all contract tests;
-3. validates chain ID `11155111` and two distinct signers;
+3. validates chain ID `11155111` and the administrator signer;
 4. deploys the contract and waits for a successful receipt;
 5. validates deployed bytecode and the administrator role;
-6. authorizes the issuer and waits for a successful receipt;
-7. validates issuer authorization;
-8. writes public runtime and evidence files; and
-9. verifies source on Etherscan when its API key is configured.
+6. writes public runtime and evidence files; and
+7. verifies source on Etherscan when its API key is configured.
 
 Expected public evidence includes:
 
 - contract address;
 - deployment block;
-- administrator and issuer addresses;
-- deployment and authorization transaction hashes; and
+- administrator address;
+- deployment transaction hash; and
 - source-verification status.
 
 Do not expose the contents of the encrypted keystore when sharing evidence.
 
 ### Interrupted deployment recovery
 
-If the deployment receipt is confirmed but issuer authorization is missing or
-ambiguous, do not rerun the deployment command. Inspect:
+If the deployment command is interrupted after transaction submission, do not
+rerun it. Inspect:
 
 ```bash
 docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
   npm run docker:export-deployment
 ```
 
-After confirming the recorded contract and wallets, run recovery:
+After confirming the recorded administrator, nonce and transaction hash, run
+recovery:
 
 ```bash
-docker compose --env-file .env.docker --profile deploy run --rm resume-authorization
+docker compose --env-file .env.docker --profile deploy run --rm resume-deployment
 ```
 
-Recovery never deploys another contract. It validates the exact deployed
-bytecode, successful deployment receipt, deployment block, signer addresses,
-administrator role, current issuer role, and the recorded authorization
-transaction and nonce before deciding what to do:
-
-- an active issuer is finalized without a transaction;
-- a pending transaction is reported and never duplicated;
-- an absent transaction whose nonce is still available is ambiguous and
-  blocked;
-- a successful receipt without the role is inconsistent and blocked; and
-- only a failed receipt, or an absent transaction whose nonce is already
-  consumed, is eligible for a deliberate retry.
-
-When the evidence status becomes `AUTHORIZATION_RETRY_REQUIRED`, first inspect
-the exported evidence and copy its recorded issuer-authorization transaction
-hash. Then temporarily set both values in `.env.docker`:
-
-```dotenv
-ALLOW_AUTHORIZATION_RESUBMIT=true
-AUTHORIZATION_RETRY_CONFIRMATION=0xExactRecordedAuthorizationTransactionHash
-```
-
-Rerun `resume-authorization` once. It will reject a missing or different hash.
-After the retry is confirmed, reset the variables to `false` and blank. If
-recovery reports `AUTHORIZATION_PENDING`, `AUTHORIZATION_AMBIGUOUS`, or
-`AUTHORIZATION_INCONSISTENT`, do not enable retry; investigate the recorded
-transaction and nonce first.
+Recovery is read-only and never deploys another contract. A successful receipt
+is finalized only after exact bytecode, deployment block and administrator-role
+validation. Pending, failed, inconsistent or unavailable transaction evidence
+is recorded and blocked. Investigate it before deliberately enabling a new
+deployment; never use `ALLOW_NEW_DEPLOYMENT=true` merely because confirmation
+timed out.
 
 ### Source verification retry
 
@@ -303,8 +270,11 @@ BLOCKCHAIN_CHAIN_ID=11155111
 PRAMAAN_CHAIN_ADDRESS=0x...
 PRAMAAN_CHAIN_START_BLOCK=12345678
 ADMINISTRATOR_ADDRESS=0x...
-ISSUER_ADDRESS=0x...
 ```
+
+Older runtime files may also contain an optional `ISSUER_ADDRESS`. It remains
+readable for compatibility but is not generated or required by the new
+deployment flow.
 
 Compose mounts this volume read-only into all three application services. It
 prevents a contract address from being copied differently between components.
@@ -367,7 +337,8 @@ support for a complete index.
 Confirm the landing page, login page, and verifier load. Then:
 
 1. Sign in with the administrator wallet.
-2. Register an institution using the authorized issuer address.
+2. Open **Institutions and issuers**, enter the institution and its primary
+   issuer wallet, and approve the authorization transaction when prompted.
 3. Switch to the issuer wallet and sign in.
 4. Connect a separate citizen wallet and submit a certificate request.
 5. Hash the exact certificate file in the issuer workspace.
@@ -420,7 +391,7 @@ Hardhat keystore. It does not remove or alter the Sepolia contract.
 
 Run exactly one configuration phase:
 
-- `configure-existing` for a deployed and authorized contract; or
+- `configure-existing` for an already deployed contract; or
 - `deploy-contract` for a new teammate-owned contract.
 
 Do not hand-edit generated runtime metadata.
@@ -473,19 +444,20 @@ in the [root README](../README.md).
 
 The legacy `npm run sepolia:deploy-demo` command sends four transactions for a
 full synthetic deploy/authorize/issue/revoke lifecycle. The Docker onboarding
-path intentionally sends only deploy and authorize.
+path intentionally sends only the deployment transaction. The legacy command
+alone requires `ISSUER_PRIVATE_KEY`.
 
 ## 11. Completion checklist
 
 A teammate has completed this guide when:
 
 - the selected Sepolia contract identity is validated;
-- the administrator and issuer are different test-only wallets;
-- a new deployment, if chosen, has exactly two successful setup
-  transactions;
+- the administrator uses a dedicated test-only wallet;
+- a new deployment, if chosen, has exactly one successful setup transaction;
 - the `deployment_state` runtime is generated and consistent across services;
 - all three containers are healthy;
 - no private key is present in application container environments;
 - the frontend, login, dashboard, and public verifier load;
+- the administrator can authorize and register the first issuer after startup;
 - a synthetic certificate can be issued and verified; and
 - no personal certificate data or secret is committed or shared.

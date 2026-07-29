@@ -18,12 +18,19 @@ const valid = {
   contractAddress: "0x0bb21729BBDaBe54A289A1e924941F8F635Cab84",
   deploymentBlockNumber: 11318772,
   administrator: "0x3537d004295AF62098e63DCF6bB8A7c6dAaCB447",
-  issuer: "0x4e02876F9bfd58f9D2D542F9520055BeD3addd28",
 };
+const legacyIssuer = "0x4e02876F9bfd58f9D2D542F9520055BeD3addd28";
 
 describe("Docker deployment runtime metadata", () => {
   it("round-trips validated public deployment values", () => {
     assert.deepEqual(parseRuntimeEnv(serializeRuntimeEnv(valid)), valid);
+    assert.doesNotMatch(serializeRuntimeEnv(valid), /ISSUER_ADDRESS/u);
+  });
+
+  it("continues to read optional legacy issuer metadata", () => {
+    const legacy = { ...valid, issuer: legacyIssuer };
+    assert.deepEqual(parseRuntimeEnv(serializeRuntimeEnv(legacy)), legacy);
+    assert.match(serializeRuntimeEnv(legacy), new RegExp(`ISSUER_ADDRESS=${legacyIssuer}`, "u"));
   });
 
   it("rejects non-Sepolia and same-wallet deployment metadata", () => {
@@ -32,7 +39,10 @@ describe("Docker deployment runtime metadata", () => {
       /Sepolia/,
     );
     assert.throws(
-      () => normalizeDeploymentMetadata({ ...valid, issuer: valid.administrator }),
+      () => normalizeDeploymentMetadata({
+        ...valid,
+        issuer: valid.administrator,
+      }),
       /must be different/,
     );
   });

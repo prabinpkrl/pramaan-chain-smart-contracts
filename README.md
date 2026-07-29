@@ -13,9 +13,10 @@ This repository contains:
 - a React/Vite public verifier plus administrator, issuer, and citizen portals.
 
 The recommended local workflow uses Docker Compose. A teammate can either
-deploy a separate Sepolia contract with their own test-only administrator and
-issuer wallets, or validate and use an existing deployment. The normal
-application containers never receive either wallet's private key.
+deploy a separate Sepolia contract with their own test-only administrator
+wallet, or validate and use an existing deployment. Issuers are authorized
+later through the administrator dashboard. The normal application containers
+never receive a wallet private key.
 
 ## Start here
 
@@ -35,7 +36,7 @@ For the recommended workflow:
 - Git
 - Docker Engine with the Compose plugin
 - a Sepolia RPC endpoint
-- two different, test-only Ethereum accounts and enough Sepolia ETH if
+- a dedicated, test-only administrator account with enough Sepolia ETH if
   deploying a new contract
 - an optional Etherscan API key for source verification
 
@@ -57,7 +58,7 @@ Copy the full commit printed by `git rev-parse HEAD` into `SOURCE_COMMIT` in
 `.env.docker`. The commit must already be pushed to this GitHub repository:
 the one-shot contract image is built from that exact remote revision and
 records it as image and deployment provenance. Also set `SEPOLIA_RPC_URL` and
-the four `IMPORT_*` values, then run the read-only validator:
+the three `IMPORT_*` values, then run the read-only validator:
 
 ```bash
 docker compose --env-file .env.docker --profile deploy run --rm configure-existing
@@ -66,8 +67,8 @@ docker compose --env-file .env.docker up --build -d
 
 The import checks Sepolia chain ID `11155111`, exact runtime bytecode, the
 successful contract-creation receipt in the supplied deployment block, the
-administrator role, and the issuer's current authorization. It sends no
-transaction.
+administrator role, and the recorded administrator address. It sends no
+transaction and does not require an issuer.
 
 Open:
 
@@ -88,19 +89,15 @@ docker compose --env-file .env.docker down
 ## Deploy a teammate-owned Sepolia contract
 
 The deployment phase is deliberately separate from application startup. It
-sends exactly two transactions:
+sends exactly one transaction: deploy `PramaanChain` from the administrator
+wallet. Issuer authorization is a later browser-wallet action.
 
-1. deploy `PramaanChain`; and
-2. authorize the separate issuer wallet.
-
-Store both keys in the persistent, encrypted Hardhat keystore volume:
+Store only the administrator key in the persistent, encrypted Hardhat
+keystore volume:
 
 ```bash
 docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
   npx hardhat keystore set DEPLOYER_PRIVATE_KEY
-
-docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
-  npx hardhat keystore set ISSUER_PRIVATE_KEY
 ```
 
 Optionally store an Etherscan key:
@@ -143,30 +140,28 @@ docker compose --env-file .env.docker --profile deploy run --rm contract-tools \
   npm run sepolia:verify -- <CONTRACT_ADDRESS>
 ```
 
-If deployment was confirmed but issuer authorization was interrupted, export
-and inspect the recorded evidence first. Recovery always checks the exact
-bytecode, deployment receipt, administrator role, current issuer role,
-recorded authorization receipt/transaction, and administrator nonce:
+If deployment was interrupted after submission, export and inspect the
+recorded evidence first. Recovery resolves the recorded deployment transaction
+and never sends another one:
 
 ```bash
-docker compose --env-file .env.docker --profile deploy run --rm resume-authorization
+docker compose --env-file .env.docker --profile deploy run --rm resume-deployment
 ```
 
-It finalizes an already successful authorization, waits when the original
-transaction is pending, and blocks when its outcome is ambiguous. It can retry
-only after proving the original failed or its nonce was consumed, and only
-after the operator explicitly confirms the exact recorded transaction hash.
-See the recovery procedure in the demo guide.
+It finalizes a successful deployment after validating its exact bytecode,
+receipt, block and administrator role. Pending, failed, inconsistent or
+ambiguous evidence is reported without another transaction. See the recovery
+procedure in the demo guide.
 
 Follow the complete safety checks and troubleshooting procedure in
 [`docs/demo.md`](docs/demo.md).
 
 ## Docker trust and persistence
 
-- `contract-tools`, `deploy-contract`, `resume-authorization`, and
+- `contract-tools`, `deploy-contract`, `resume-deployment`, and
   `configure-existing` are one-shot services behind the `deploy` profile.
-- The administrator key, issuer key, and optional Etherscan key exist only in
-  the encrypted `hardhat_keystore` Docker volume used by those services.
+- The administrator key and optional Etherscan key exist only in the encrypted
+  `hardhat_keystore` Docker volume used by those services.
 - The gateway runs read-only; its issuer key and write API key are explicitly
   blank.
 - The private backend generates a random application-data encryption key on
@@ -188,8 +183,8 @@ Follow the complete safety checks and troubleshooting procedure in
 For a newly deployed contract:
 
 1. Sign in with the administrator wallet that deployed the contract.
-2. Open **Institutions and issuers** and register an institution using the
-   authorized issuer address.
+2. Open **Institutions and issuers**, enter the institution and its primary
+   issuer address, and approve the issuer-authorization transaction.
 3. Change to the issuer wallet and sign in to its workspace.
 4. Use another wallet as a citizen, connect it to the institution's public ID,
    and submit a certificate request.
@@ -237,16 +232,17 @@ npm run local:deploy
 ```
 
 The older `npm run sepolia:deploy-demo` command performs a complete synthetic
-four-transaction lifecycle. The Docker onboarding flow intentionally uses
-`sepolia:deploy-authorize` and only sends the two transactions needed to
-configure the application.
+four-transaction lifecycle and alone requires a separate issuer key. The
+normal Docker onboarding flow uses `sepolia:deploy` and sends only the contract
+deployment transaction.
 
 ## Main commands
 
 | Command | Purpose |
 | --- | --- |
 | `docker compose --env-file .env.docker up --build -d` | Build and start the application |
-| `docker compose --env-file .env.docker --profile deploy run --rm deploy-contract` | Test, deploy, authorize, and optionally verify |
+| `docker compose --env-file .env.docker --profile deploy run --rm deploy-contract` | Test, deploy with the administrator, and optionally verify |
+| `docker compose --env-file .env.docker --profile deploy run --rm resume-deployment` | Resolve and finalize an interrupted deployment without another write |
 | `docker compose --env-file .env.docker --profile deploy run --rm configure-existing` | Validate and import an existing deployment without a write |
 | `npm run compile` | Compile Solidity and generate the ABI artifact |
 | `npm test` | Run contract tests |
@@ -254,7 +250,8 @@ configure the application.
 | `npm run local:node` | Start a persistent local Hardhat node |
 | `npm run local:deploy` | Deploy a fresh contract locally |
 | `npm run local:demo` | Run the checked local lifecycle |
-| `npm run sepolia:deploy-authorize` | Deploy and authorize only |
+| `npm run sepolia:deploy` | Deploy with the administrator only |
+| `npm run sepolia:deploy-demo` | Optional two-wallet synthetic lifecycle |
 | `npm run sepolia:verify -- <address>` | Verify source on Etherscan |
 
 ## Documentation

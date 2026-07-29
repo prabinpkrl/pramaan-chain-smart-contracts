@@ -262,7 +262,14 @@ function ManageIssuers() {
             </article>
           ))}
           {institutions.length === 0 && (
-            <p className="text-gray-500">No institutions are registered yet.</p>
+            <div className="rounded-xl border border-dashed p-5">
+              <p className="font-medium">No institutions are registered yet.</p>
+              <p className="mt-1 text-sm text-gray-500">
+                Start by entering an institution and its primary issuer wallet
+                above. Your administrator wallet will authorize that issuer
+                on-chain before the private membership is registered.
+              </p>
+            </div>
           )}
         </div>
       </section>

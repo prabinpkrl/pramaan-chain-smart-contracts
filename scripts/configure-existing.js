@@ -36,7 +36,6 @@ try {
     contractAddress: required("IMPORT_CONTRACT_ADDRESS"),
     deploymentBlockNumber: required("IMPORT_DEPLOYMENT_BLOCK"),
     administrator: required("IMPORT_ADMINISTRATOR_ADDRESS"),
-    issuer: required("IMPORT_ISSUER_ADDRESS"),
   });
 
   const provider = new JsonRpcProvider(required("SEPOLIA_RPC_URL"));
@@ -47,14 +46,8 @@ try {
     );
   }
 
-  const {
-    contract,
-    deploymentReceipt,
-    deployedBytecodeHash,
-  } = await validateExactDeployment({ provider, metadata });
-  if (!await contract.isAuthorizedIssuer(metadata.issuer)) {
-    throw new Error("Supplied issuer is not currently authorized");
-  }
+  const { deploymentReceipt, deployedBytecodeHash } =
+    await validateExactDeployment({ provider, metadata });
 
   Object.assign(state, metadata, {
     status: "READY",
