@@ -14,16 +14,17 @@ export async function deriveAuthorization({ db, chain, address }) {
   const issuerAuthorized = issuerMemberships.length > 0
     ? await chain.isAuthorizedIssuer(normalized)
     : false;
+  const isIssuer = issuerAuthorized && issuerMemberships.length > 0;
   const roles = [];
   if (admin) roles.push("ADMIN");
-  if (issuerAuthorized && issuerMemberships.length > 0) roles.push("ISSUER");
-  if (citizenRelationships.length > 0) roles.push("CITIZEN");
+  if (isIssuer) roles.push("ISSUER");
+  else if (citizenRelationships.length > 0) roles.push("CITIZEN");
   if (roles.length === 0) roles.push("UNLINKED");
   return {
     address: normalized,
     roles,
     issuerMemberships: issuerAuthorized ? issuerMemberships : [],
-    citizenRelationships,
+    citizenRelationships: isIssuer ? [] : citizenRelationships,
   };
 }
 

@@ -311,6 +311,61 @@ describe("PramaanChain application backend", () => {
       .expect(403);
   });
 
+  it("makes issuer and citizen roles mutually exclusive", async () => {
+    const citizenAgent = request.agent(app);
+    const citizenSession = await login(citizenAgent, citizen);
+    await citizenAgent
+      .post("/api/citizen/institutions/connect")
+      .set("x-csrf-token", citizenSession.csrfToken)
+      .send({ publicId: institution.publicId })
+      .expect(201);
+    assert.equal(db.getCitizenRelationships(citizen.address).length, 1);
+
+    chain.admins.add(issuer.address.toLowerCase());
+    chain.issuers.add(citizen.address.toLowerCase());
+    const adminAgent = request.agent(app);
+    const adminSession = await login(adminAgent, issuer);
+    await adminAgent
+      .post("/api/admin/institutions")
+      .set("x-csrf-token", adminSession.csrfToken)
+      .send({
+        publicId: "FORMER-CITIZEN-ISSUER",
+        name: "Former Citizen Institution",
+        issuerAddress: citizen.address,
+      })
+      .expect(201);
+
+    assert.equal(db.getCitizenRelationships(citizen.address).length, 0);
+    const refreshed = await citizenAgent
+      .get("/api/auth/session")
+      .expect(200);
+    assert.deepEqual(refreshed.body.roles, ["ISSUER"]);
+    assert.deepEqual(refreshed.body.citizenRelationships, []);
+
+    const blocked = await citizenAgent
+      .post("/api/citizen/institutions/connect")
+      .set("x-csrf-token", refreshed.body.csrfToken)
+      .send({ publicId: institution.publicId })
+      .expect(403);
+    assert.equal(blocked.body.error.code, "ISSUER_CANNOT_REGISTER_AS_CITIZEN");
+  });
+
+  it("blocks an on-chain authorized issuer before private issuer registration", async () => {
+    const futureIssuer = Wallet.createRandom();
+    chain.issuers.add(futureIssuer.address.toLowerCase());
+    const agent = request.agent(app);
+    const session = await login(agent, futureIssuer);
+    assert.deepEqual(session.roles, ["UNLINKED"]);
+
+    const blocked = await agent
+      .post("/api/citizen/institutions/connect")
+      .set("x-csrf-token", session.csrfToken)
+      .send({ publicId: institution.publicId })
+      .expect(403);
+    assert.equal(blocked.body.error.code, "ISSUER_CANNOT_REGISTER_AS_CITIZEN");
+    assert.equal(db.getCitizenRelationships(futureIssuer.address).length, 0);
+  });
+
   it("atomically freezes one hash while issuance is processing", async () => {
     db.connectCitizen({ publicId: institution.publicId, address: citizen.address });
     const certificateRequest = db.createRequest({
@@ -443,6 +498,41 @@ describe("PramaanChain application backend", () => {
 
       const rawDatabase = readFileSync(filename).toString("latin1");
       assert.ok(!rawDatabase.includes(wallet.address));
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("reconciles legacy issuer and citizen overlap when the database opens", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "pramaanchain-role-test-"));
+    const filename = path.join(directory, "private.sqlite");
+    const encryptionKey = randomBytes(32);
+    const overlappingWallet = Wallet.createRandom();
+    try {
+      const fileDb = new AppDatabase(filename, encryptionKey);
+      const originalIssuer = Wallet.createRandom();
+      const citizenInstitution = fileDb.createInstitution({
+        name: "Citizen Institution",
+        publicId: "CITIZEN-INSTITUTION",
+        issuerAddress: originalIssuer.address,
+      });
+      fileDb.connectCitizen({
+        publicId: citizenInstitution.publicId,
+        address: overlappingWallet.address,
+      });
+      fileDb.createInstitution({
+        name: "Issuer Institution",
+        publicId: "ISSUER-INSTITUTION",
+        issuerAddress: overlappingWallet.address,
+      });
+
+      fileDb.db.prepare("UPDATE citizen_relationships SET active = 1").run();
+      assert.equal(fileDb.getCitizenRelationships(overlappingWallet.address).length, 1);
+      fileDb.close();
+
+      const reopened = new AppDatabase(filename, encryptionKey);
+      assert.equal(reopened.getCitizenRelationships(overlappingWallet.address).length, 0);
+      reopened.close();
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

@@ -111,6 +111,9 @@ state-changing request also needs the current `x-csrf-token`. Calling
 
 Authorization is refreshed from the contract and database on each protected
 request. Client-supplied roles are ignored.
+Issuer and citizen roles are mutually exclusive: issuer registration
+atomically deactivates existing citizen relationships, and authorized issuer
+wallets cannot connect as citizens.
 
 ### Private data model
 
@@ -134,7 +137,8 @@ The database file is created with restricted permissions.
 1. The administrator wallet authorizes the issuer directly on-chain.
 2. The application backend confirms the issuer is currently authorized.
 3. The administrator registers the institution name, public ID, and issuer
-   wallet in private storage.
+   wallet in private storage. Any citizen relationships for that wallet are
+   deactivated in the same database transaction.
 4. A citizen connects using that public ID.
 
 The public ID is a relationship locator, not a password or secret.

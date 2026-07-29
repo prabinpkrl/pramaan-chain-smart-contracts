@@ -123,7 +123,8 @@ sequenceDiagram
 - restores the current session on application load
 - chooses a default role using `ADMIN`, `ISSUER`, `CITIZEN`, `UNLINKED`
   priority
-- allows a multi-role wallet to switch among its returned roles
+- allows a multi-role wallet, such as an administrator who is also an issuer,
+  to switch among its returned roles; issuer and citizen roles never coexist
 - clears the session when the selected wallet account or chain changes
 - retains the selected provider for authorized contract actions
 

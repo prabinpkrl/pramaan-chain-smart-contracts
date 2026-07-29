@@ -75,6 +75,9 @@ Roles are derived by the application backend on every protected request:
 - `UNLINKED` is assigned when no protected relationship exists.
 
 The browser never chooses or asserts a trusted role.
+Issuer and citizen roles are mutually exclusive. Registering a wallet as an
+issuer deactivates its citizen relationships, and an authorized issuer wallet
+cannot create a new citizen relationship.
 
 ## Data boundaries
 

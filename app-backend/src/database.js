@@ -19,6 +19,16 @@ export class AppDatabase {
     this.db = new Database(filename);
     this.db.pragma("journal_mode = WAL");
     this.db.exec(schema);
+    this.db.prepare(`
+      UPDATE citizen_relationships
+      SET active = 0
+      WHERE active = 1 AND citizen_id IN (
+        SELECT c.id
+        FROM citizens c
+        JOIN issuer_memberships m ON m.wallet_hash = c.wallet_hash
+        WHERE m.active = 1
+      )
+    `).run();
     if (filename !== ":memory:") fs.chmodSync(filename, 0o600);
     this.crypto = createCryptoBox(encryptionKey);
   }
@@ -64,6 +74,13 @@ export class AppDatabase {
         this.crypto.encrypt(address),
         timestamp,
       );
+      this.db.prepare(`
+        UPDATE citizen_relationships
+        SET active = 0
+        WHERE citizen_id IN (
+          SELECT id FROM citizens WHERE wallet_hash = ?
+        ) AND active = 1
+      `).run(walletHash);
       return {
         id: institutionId,
         publicId: normalizedPublicId,
@@ -237,6 +254,15 @@ export class AppDatabase {
 
       const normalized = this.normalizeWallet(address);
       const walletHash = this.walletHash(normalized);
+      if (this.db.prepare(`
+        SELECT 1 FROM issuer_memberships
+        WHERE wallet_hash = ? AND active = 1
+      `).get(walletHash)) {
+        throw forbidden(
+          "ISSUER_CANNOT_REGISTER_AS_CITIZEN",
+          "An issuer wallet cannot register as a citizen",
+        );
+      }
       let citizen = this.db.prepare("SELECT * FROM citizens WHERE wallet_hash = ?").get(walletHash);
       if (!citizen) {
         const citizenId = randomUUID();

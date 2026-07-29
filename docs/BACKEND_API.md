@@ -25,7 +25,9 @@ All request and response bodies use JSON unless the successful status is
 
 The backend derives `ADMIN`, `ISSUER`, `CITIZEN`, or `UNLINKED`; a request body
 cannot select its own role. `GET /api/auth/session` returns current
-authorization and rotates the CSRF token.
+authorization and rotates the CSRF token. `ISSUER` and `CITIZEN` are mutually
+exclusive; issuer registration deactivates that wallet's citizen
+relationships.
 
 ### Optional gateway writes
 
@@ -404,7 +406,8 @@ single hyphens between segments. Returns `201` with the created institution.
 
 #### `POST /api/citizen/institutions/connect`
 
-Available to any authenticated session, including `UNLINKED`.
+Available to an authenticated wallet that is not an authorized issuer,
+including `UNLINKED`.
 
 ```json
 {
@@ -414,7 +417,8 @@ Available to any authenticated session, including `UNLINKED`.
 
 Returns `201` for a new relationship or `200` when already connected. The
 response contains the institution, connection result, and refreshed
-authorization.
+authorization. An authorized issuer receives `403
+ISSUER_CANNOT_REGISTER_AS_CITIZEN`.
 
 #### `GET /api/citizen/institutions`
 

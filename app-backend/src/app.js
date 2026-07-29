@@ -197,6 +197,12 @@ export function createApp({ db, chain, config, disableRateLimits = false }) {
     csrfRequired,
     connectionLimiter,
     asyncRoute(async (req, res) => {
+      if (await chain.isAuthorizedIssuer(req.auth.address)) {
+        throw forbidden(
+          "ISSUER_CANNOT_REGISTER_AS_CITIZEN",
+          "An authorized issuer wallet cannot register as a citizen",
+        );
+      }
       const publicId = publicInstitutionId(req.body?.publicId);
       const target = db.getInstitutionByPublicId(publicId);
       if (!target) {
