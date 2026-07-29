@@ -71,18 +71,6 @@ function Dashboard() {
           Manage Institutions
         </Button>
       </div>
-
-      <div className="panel-padding rounded-xl border border-[#66521e] bg-[var(--warning-soft)] text-sm leading-6 text-[var(--warning)]">
-        <p className="mb-1 font-semibold">Deliberately not fabricated</p>
-        <p>
-          <strong>Total Issuers</strong>, <strong>Verified Today</strong>, and{" "}
-          <strong>Gas Used</strong> need dedicated backend endpoints that
-          don't exist yet (the gateway currently exposes document and event
-          reads, plus a single issuer lookup — see
-          docs/BACKEND_API.md). Once those are added, wiring them into this
-          dashboard is a small change on the frontend side.
-        </p>
-      </div>
     </DashboardLayout>
   );
 }

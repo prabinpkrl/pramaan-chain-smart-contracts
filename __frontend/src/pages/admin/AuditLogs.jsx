@@ -7,6 +7,7 @@ import EtherscanLink from "../../components/common/EtherscanLink";
 import PageHeader from "../../components/common/PageHeader";
 
 import { getRecentEvents } from "../../services/documentService";
+import { sortEventsNewestFirst } from "../../utils/events";
 
 const TYPE_LABELS = {
   issuance: "Document Issued",
@@ -47,15 +48,17 @@ function AuditLogs() {
     };
   }, []);
 
-  const filteredEvents = events.filter((event) => {
-    const term = searchTerm.toLowerCase();
-    return (
-      event.documentHash?.toLowerCase().includes(term) ||
-      event.issuer?.toLowerCase().includes(term) ||
-      event.administrator?.toLowerCase().includes(term) ||
-      event.type?.toLowerCase().includes(term)
-    );
-  });
+  const filteredEvents = sortEventsNewestFirst(
+    events.filter((event) => {
+      const term = searchTerm.toLowerCase();
+      return (
+        event.documentHash?.toLowerCase().includes(term) ||
+        event.issuer?.toLowerCase().includes(term) ||
+        event.administrator?.toLowerCase().includes(term) ||
+        event.type?.toLowerCase().includes(term)
+      );
+    }),
+  );
 
   return (
     <DashboardLayout>

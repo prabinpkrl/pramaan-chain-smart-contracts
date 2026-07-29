@@ -401,6 +401,16 @@ describe("PramaanChain application backend", () => {
       .set("x-csrf-token", issuerSession.csrfToken)
       .send({ institutionId: institution.id })
       .expect(200);
+
+    // The browser-wallet transaction is mined before backend confirmation.
+    chain.records.set(HASH_A.toLowerCase(), {
+      ...chain.records.get(HASH_A.toLowerCase()),
+      status: "REVOKED",
+      revokedAt: "2026-07-25T01:00:00.000Z",
+      transactionHash: TX_B,
+      blockNumber: 2,
+    });
+
     const revoked = await issuerAgent
       .post(`/api/issuer/certificates/${confirmed.body.id}/confirm-revocation`)
       .set("x-csrf-token", issuerSession.csrfToken)

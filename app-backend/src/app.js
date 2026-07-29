@@ -372,13 +372,6 @@ export function createApp({ db, chain, config, disableRateLimits = false }) {
           "Only the certificate's original on-chain issuer wallet may revoke it",
         );
       }
-      const chainState = await chain.verifyCertificate(certificate.documentHash);
-      if (
-        chainState.status !== "ACTIVE"
-        || getAddress(chainState.issuer) !== getAddress(req.auth.address)
-      ) {
-        throw forbidden("REVOCATION_NOT_ALLOWED", "The active certificate is not owned by this issuer wallet");
-      }
       const transactionHash = text(req.body?.transactionHash, "transactionHash", { max: 100 });
       const attemptId = text(req.body?.attemptId, "attemptId", { max: 100 });
       const chainRecord = await chain.validateRevocation({
