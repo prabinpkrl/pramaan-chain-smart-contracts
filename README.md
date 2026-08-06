@@ -25,6 +25,22 @@ citizen personal data.
 The Docker workflow can validate the reference deployment or configure a
 separate approved Sepolia contract.
 
+## Hosted prototype
+
+| Service | Hosted URL |
+| --- | --- |
+| Web application | <https://pramaanchainapp.vercel.app> |
+| Public gateway | <https://pramaan-chain-smart-contracts.onrender.com> |
+| Gateway health | <https://pramaan-chain-smart-contracts.onrender.com/api/health> |
+| Private application backend | <https://pramaan-chain-smart-contracts-1.onrender.com> |
+| Application-backend health | <https://pramaan-chain-smart-contracts-1.onrender.com/api/health> |
+
+Opening the hosted frontend sends non-blocking health requests through the
+checked-in Vercel proxy to wake both Render services. The page renders
+immediately while free Render instances start, so API features can take about
+a minute to become available after an idle period. Refresh once both health
+endpoints respond.
+
 ## Why PramaanChain?
 
 - **Document privacy:** exact files stay in the browser; only their SHA-256
@@ -257,6 +273,7 @@ rather than including secrets or personal data in a public issue.
 | --- | --- |
 | [Documentation index](docs/README.md) | All current project documentation |
 | [Docker demo](docs/DOCKER_DEMO.md) | Complete deploy/import and application walkthrough |
+| [Render and Vercel deployment](docs/HOSTING_DEPLOYMENT.md) | Host the Docker backends and Vite frontend for the public prototype |
 | [System architecture](docs/SYSTEM_ARCHITECTURE.md) | Source of truth for components, trust boundaries, and flows |
 | [Backend architecture](docs/BACKEND_ARCHITECTURE.md) | Public gateway, private backend, data model, authentication, and transaction confirmation |
 | [Backend API](docs/BACKEND_API.md) | All implemented gateway and application GET and POST endpoints |

@@ -9,6 +9,7 @@ records, and deployment evidence are preserved under
 | --- | --- |
 | [`../README.md`](../README.md) | Project overview, quick start, and common commands |
 | [`DOCKER_DEMO.md`](DOCKER_DEMO.md) | Configure a contract and demonstrate the Docker application |
+| [`HOSTING_DEPLOYMENT.md`](HOSTING_DEPLOYMENT.md) | Host the two Docker backends on Render and the Vite frontend on Vercel |
 | [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md) | Components, actors, trust boundaries, privacy, and end-to-end flow |
 | [`BACKEND_ARCHITECTURE.md`](BACKEND_ARCHITECTURE.md) | Gateway, private backend, storage, SIWE, and receipt-confirmation design |
 | [`BACKEND_API.md`](BACKEND_API.md) | Every implemented GET and POST endpoint |

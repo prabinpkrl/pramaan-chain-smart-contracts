@@ -1,9 +1,15 @@
+import { useEffect } from "react";
 import { Toaster } from "react-hot-toast";
 import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
 import AppRoutes from "./routes/AppRoutes";
 import { AuthProvider } from "./context/AuthContext";
+import { warmServices } from "./services/api";
 
 function App() {
+  useEffect(() => {
+    void warmServices();
+  }, []);
+
   return (
     <LazyMotion features={domAnimation} strict>
       <MotionConfig reducedMotion="user">

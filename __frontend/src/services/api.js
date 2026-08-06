@@ -2,6 +2,7 @@ import axios from "axios";
 import { config } from "../config";
 
 let csrfToken = null;
+let warmupPromise = null;
 
 export const appApi = axios.create({
   baseURL: config.appApiUrl,
@@ -13,6 +14,16 @@ export const blockchainApi = axios.create({
   baseURL: config.blockchainApiUrl,
   timeout: 20_000,
 });
+
+export function warmServices() {
+  if (!warmupPromise) {
+    warmupPromise = Promise.allSettled([
+      appApi.get("/health", { timeout: 90_000 }),
+      blockchainApi.get("/health", { timeout: 90_000 }),
+    ]);
+  }
+  return warmupPromise;
+}
 
 appApi.interceptors.request.use((request) => {
   if (csrfToken && ["post", "put", "patch", "delete"].includes(request.method)) {
