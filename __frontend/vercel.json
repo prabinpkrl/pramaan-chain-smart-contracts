@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/app-api/:path*",
+      "destination": "https://pramaan-chain-smart-contracts-1.onrender.com/:path*"
+    },
+    {
+      "source": "/chain-api/:path*",
+      "destination": "https://pramaan-chain-smart-contracts.onrender.com/:path*"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/index.html"
+    }
+  ]
+}
